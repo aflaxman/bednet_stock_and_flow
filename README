@@ -1,0 +1,109 @@
+Introduction
+------------
+
+To be written: Malaria, Bednets, Coverage, Data Sources, Outline of
+what follows.
+
+
+Compartmental Model
+-------------------
+
+For a particular country, c:
+
+W[t] := number of nets in warehouses at time t
+H[t] := number of nets in households at time t
+
+m[t] := number of nets manufactured during time period t
+d[t] := number of nets distributed during time period t
+l[t] := number of nets lost or discarded during time period t
+
+The compartments are connected as follows:
+
+  m  +---+  d  +---+  l
+---->| W |---->| H |---->
+     +---+     +---+
+
+
+Model parameters
+----------------
+
+p_l := The probability a net is lost during a time period
+d[t] := the number of nets distributed during time period t
+m[t] := the number of nets manufactured during time period t
+
+
+Model Dynamics
+--------------
+
+W[t+1] = W[t] + m[t] - d[t]
+H[t+1] = H[t] + d[t] - l[t]
+l[t] = H[t] * p_l
+
+
+Assumptions in Dynamics
+-----------------------
+
+The model dynamics make two major assumptions:
+
+1. Every net resides in a warehouse for at least one time period
+   before being distributed to a household.
+
+2. Every net is lost/discarded independently at random at every time
+   step with the same probability.
+
+
+Statistical Model
+-----------------
+
+There are 5 types of data that will drive parameter estimation:
+
+Manufacturing Data - Information on the number of nets procured by
+each country for distribution;  initial model::
+
+    m_i ~ m(t_i) + N(0, s_m^2)
+
+
+Distribution Data - Information on the number of nets distributed
+through the public sector supply chain in each country;  initial model::
+
+    d1_i ~ d(t_i) + N(0, s_d^2)
+
+
+Household Survey Data - Information from DHS, MICS, and MIS where
+head-of-household reports number of nets and time when each net was
+obtained;  initial model for total number of nets::
+
+    N_i ~ H(t_i) + N(0, s_{N_i}^2)
+        (here t_i is the year of the survey used to compute N_i)
+
+initial model for number of nets obtained during a particular year::
+
+    d2_i ~ d(t^e_i) * (1 - p_l)^{t^s_i - t^e_i} + N(0, s_{d2_i}^2)
+        (here t^s_i is the year of the survey, and t^e_i is the year
+        of the estimate)
+
+
+Net Retention Data - Information from studies on how many nets were
+still in households a certain amount of time after they were
+distributed::
+
+    r_i ~ (1 - p_l)^{T_i} + N(0, s_r^2)
+
+        (where r_i := fraction retained and T_i := follow up time for
+        the study)
+
+Priors
+------
+
+To be determined.
+
+All of the s_x terms in the statistical model above need to be
+assigned hyperpriors.
+
+
+Additional Information
+----------------------
+
+Descriptions of the household surveys:
+http://www.rollbackmalaria.org/partnership/wg/wg_monitoring/docs/GuidelinesForCorePopulationFINAL9-20_Malaria.pdf
+
