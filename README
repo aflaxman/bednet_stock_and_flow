@@ -99,7 +99,7 @@ distributed::
 Priors
 ------
 
-p_l ~ Beta(2, 10)
+p_l ~ Beta(10, 990)
 d[t] ~ Lognormal(log(1000), 1)
 m[t] ~ Lognormal(log(1000), 1)
 
@@ -107,11 +107,11 @@ W_0 ~ Lognormal(log(1000), 10)
 H_0 ~ Lognormal(log(1000), 10)
 
 s_r ~ Gamma(10., 10./.01)
-s_m ~ Gamma(100., 100./.01)
-s_d ~ Gamma(100., 100./.01)
+s_m ~ Gamma(100., 100./.001)
+s_d ~ Gamma(100., 100./.001)
 
-W[t+1]/W[t] ~ Normal(1., 1.)
-H[t+1]/H[t] ~ Normal(1., 1.)
+W[t+1]/W[t] ~ Normal(1., 100.)
+H[t+1]/H[t] ~ Normal(1., 100.)
 
 W[t], H[t] >= 0
 

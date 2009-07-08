@@ -37,6 +37,7 @@ household_stock_data = load_csv('stock_surveyitns_forabie07072009.csv')
 household_distribution_data = load_csv('surveyitns_forabie7072009.csv')
 retention_data = load_csv('retention07072009.csv')
 
+
 ### pick the country of interest
 c = 'Zambia'
 
@@ -46,6 +47,7 @@ nd_all = [float(d['Program_Itns']) for d in administrative_distribution_data \
 nd_avg = mean(nd_all)
 nd_ste = std(nd_all)
 
+### setup the model variables
 vars = []
 
    #######################
@@ -53,15 +55,15 @@ vars = []
  ###
 #######################
 
-p_l = Beta('Pr[net is lost]', alpha=2., beta=10.)
+p_l = Beta('Pr[net is lost]', alpha=10., beta=990., value=.01)
 
 # TODO: consider choosing better priors
 nd = Lognormal('nets distributed', mu=log(1000) * ones(10), tau=1.)
 nm = Lognormal('nets manufactured', mu=log(1000) * ones(10), tau=1.)
 
 # TODO: consider choosing better priors
-W_0 = Lognormal('initial warehouse net stock', mu=log(1000), tau=10.)
-H_0 = Lognormal('initial household net stock', mu=log(1000), tau=10.)
+W_0 = Lognormal('initial warehouse net stock', mu=log(1000), tau=10., value=1000.)
+H_0 = Lognormal('initial household net stock', mu=log(1000), tau=10., value=1000.)
 
 @deterministic(name='warehouse net stock')
 def W(W_0=W_0, nm=nm, nd=nd):
@@ -89,18 +91,18 @@ vars += [p_l, nd, nm, W_0, H_0, W, H]
 
 # TODO: consider choosing better priors
 s_r = Gamma('standard error in retention rate', 10., 10./.01)
-s_m = Gamma('error in manufacturing data', 100., 100./.01, value=.001)
-s_d = Gamma('error in administrative distribution data', 100., 100./.01, value=.001)
+s_m = Gamma('error in manufacturing data', 1000., 1000./.03, value=.03)
+s_d = Gamma('error in administrative distribution data', 1000., 1000./.03, value=.03)
 
 vars += [s_r, s_m, s_d]
 
 @potential
 def smooth_H(H=H):
-    return normal_like(H[:-1] / H[1:], 1., 1.)
+    return normal_like(H[:-1] / H[1:], 1., 100.)
 
 @potential
 def smooth_W(W=W):
-    return normal_like(W[:-1] / W[1:], 1., 1.)
+    return normal_like(W[:-1] / W[1:], 1., 100.)
 
 @potential
 def positive_stocks(H=H, W=W):
@@ -155,7 +157,7 @@ for d in administrative_distribution_data:
     @observed
     @stochastic(name='administrative_distribution_%s_%s' % (d['Country'], d['Year']))
     def obs(value=float(d['Program_Itns']), year=int(d['Year']), nd=nd, s_d=s_d):
-        return normal_like(value / nd[year-2000], 1., 1./ s_d**2)
+        return normal_like(value / nd[year-2000], 1., 1. / s_d**2)
     admin_distribution_obs.append(obs)
 
 vars += [admin_distribution_obs]
@@ -204,7 +206,7 @@ vars += [household_stock_obs]
   ### fit the model
  ###
 #################
-print 'running MCMC...'
+print 'running MCMC for country %s...' % c
 mc = MCMC(vars)
 mc.sample(20000,10000,20)
 
@@ -244,9 +246,22 @@ def my_hist(stoch):
            color=['k', 'k', 'r', 'k', 'k'])
     yticks([])
 
+def my_acorr(stoch):
+    vals = stoch.trace()
+
+    if len(shape(vals)) > 1:
+        vals = vals[0]
+
+    vals -= mean(vals)
+    acorr(vals, normed=True, maxlags=min(8, len(vals)))
+    xticks([])
+    yticks([])
+    
 clf()
 
-subplot(2,3,1)
+cols = 4
+
+subplot(2,cols,1)
 title('nets manufactured')
 plot_fit(nm)
 scatter_data(manufacturing_data, c, 'Country', 'Manu_Itns',
@@ -254,7 +269,7 @@ scatter_data(manufacturing_data, c, 'Country', 'Manu_Itns',
 decorate_figure()
 
 
-subplot(2,3,2)
+subplot(2,cols,2)
 title('nets distributed')
 plot_fit(nd)
 scatter_data(administrative_distribution_data, c, 'Country', 'Program_Itns',
@@ -264,20 +279,20 @@ scatter_data(household_distribution_data, c, 'Name', 'Survey_Itns',
 decorate_figure()
 
 
-subplot(2,3,4)
+subplot(2,cols,cols+1)
 title('nets in warehouse')
 plot_fit(W)
 decorate_figure()
 
 
-subplot(2,3,5)
+subplot(2,cols,cols+2)
 title('nets in households')
 plot_fit(H)
 scatter_data(household_stock_data, c, 'Name', 'Survey_Itns',
              error_key='Ste_Survey_Itns', fmt='bs')
 decorate_figure()
 
-subplot(2,3,3)
+subplot(2,cols,3)
 title(str(p_l))
 vlines(p_l.stats()['quantiles'].values(), 1, 1000,
        linewidth=2, alpha=.5, linestyle='dashed',
@@ -285,7 +300,16 @@ vlines(p_l.stats()['quantiles'].values(), 1, 1000,
 hist(p_l.trace(), normed=True, log=True)
 
 for ii, stoch in enumerate([s_r, s_m, s_d]):
-    subplot(8, 3, (6+ii)*3)
+    subplot(8, cols, (5 + ii)*cols + 3)
     my_hist(stoch)
     title(str(stoch), fontsize=8)
-    
+
+for ii, stoch in enumerate([p_l, nm, nd, W, H, s_r, s_m, s_d]):
+    subplot(8, cols*2, 2*cols - 1 + ii*2*cols)
+    plot(stoch.trace(), linewidth=2, alpha=.5)
+    xticks([])
+    yticks([])
+    title(str(stoch), fontsize=6)
+
+    subplot(8, cols*2, 2*cols + ii*2*cols)
+    my_acorr(stoch)
