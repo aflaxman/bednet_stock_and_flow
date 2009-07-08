@@ -206,18 +206,30 @@ def plot_fit(f, scale=1.e6):
 
 def scatter_data(data_list, country, country_key, data_key, error_key=None, error_val=None, fmt='gs', scale=1.e6):
     if error_key:
-        error_val = [1.96*float(d[error_key])/scale \
+        error_val = [1.96*float(d[error_key]) \
                          for d in data_list if d[country_key] == c]
     errorbar([float(d['Year']) for d in data_list if d[country_key] == c],
              [float(d[data_key])/scale for d in data_list if d[country_key] == c],
-             error_val, fmt=fmt, alpha=.5)
+             array(error_val)/scale, fmt=fmt, alpha=.5)
 
+def decorate_figure():
+    axis([2000,2010,0,10])
+    xticks([2000, 2005, 2010])
+
+def my_hist(stoch):
+    hist(stoch.trace(), normed=True, log=False)
+    l,r,b,t = axis()
+    vlines(stoch.stats()['quantiles'].values(), b, t,
+           linewidth=2, alpha=.5, linestyle='dotted',
+           color=['k', 'k', 'r', 'k', 'k'])
+    yticks([])
 
 subplot(2,3,1)
 title('nets manufactured')
 plot_fit(nm)
 scatter_data(manufacturing_data, c, 'Country', 'Manu_Itns',
              error_val=1.96 * s_m.stats()['mean'])
+decorate_figure()
 
 
 subplot(2,3,2)
@@ -227,17 +239,31 @@ scatter_data(administrative_distribution_data, c, 'Country', 'Program_Itns',
              error_val=1.96 * s_d.stats()['mean'])
 scatter_data(household_distribution_data, c, 'Name', 'Survey_Itns',
              error_key='Ste_Survey_Itns', fmt='bs')
-
-
-subplot(2,3,3)
-title('nets in warehouse')
-plot_fit(W)
+decorate_figure()
 
 
 subplot(2,3,4)
+title('nets in warehouse')
+plot_fit(W)
+decorate_figure()
+
+
+subplot(2,3,5)
 title('nets in households')
 plot_fit(H)
 scatter_data(household_stock_data, c, 'Name', 'Survey_Itns',
              error_key='Ste_Survey_Itns', fmt='bs')
+decorate_figure()
 
-subplot(2,3,5)
+subplot(2,3,3)
+title(str(p_l))
+vlines(p_l.stats()['quantiles'].values(), 1, 1000,
+       linewidth=2, alpha=.5, linestyle='dashed',
+       color=['k', 'b', 'r', 'b', 'k'])
+hist(p_l.trace(), normed=True, log=True)
+
+for ii, stoch in enumerate([s_r, s_m, s_d]):
+    subplot(8, 3, (6+ii)*3)
+    my_hist(stoch)
+    title(str(stoch), fontsize=8)
+    
