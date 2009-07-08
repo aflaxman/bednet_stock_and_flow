@@ -105,5 +105,30 @@ Additional Information
 ----------------------
 
 Descriptions of the household surveys:
-http://www.rollbackmalaria.org/partnership/wg/wg_monitoring/docs/GuidelinesForCorePopulationFINAL9-20_Malaria.pdf
+  * http://www.rollbackmalaria.org/partnership/wg/wg_monitoring/docs/GuidelinesForCorePopulationFINAL9-20_Malaria.pdf
 
+Different Survey Types:
+  * http://www.childinfo.org/malaria.html
+  * http://www.measuredhs.com/topics/malaria/start.cfm
+
+Paper: Thomas P Eisele, Kate Macintyre, Josh Yukich, and Tewolde
+Ghebremeskel, Interpreting household survey data intended to measure
+insecticide-treated bednet coverage: results from two surveys in
+Eritrea
+  * http://www.pubmedcentral.nih.gov/articlerender.fcgi?artid=1501030
+
+ITN Manufacturers:
+  * PermaNet - http://www.vestergaard-frandsen.com/permanet.htm
+  * Olyset Net - http://www.olyset.net/
+  * Net Protect - http://www.insectcontrol.net/netprotect/index.php
+  * Interceptor - http://www.basfpublichealth.com/products/interceptor.html
+  * Duranet - http://duranetmosquitonet.com/
+
+ITN Info:
+  * http://www.cdc.gov/malaria/control_prevention/vector_control.htm#itn
+  * http://en.wikipedia.org/wiki/Pyrethroid
+
+Supply Chain Software
+  * Review of 4 free systems - http://www.rhsupplies.org/fileadmin/user_upload/SSWG/RHSC-Users_Guide_R14_Final.pdf
+  * RapidSMS - http://www.net4nets.net/pdf/63_Million_Bednets_Distributed_with_Rapid_SMS.pdf
+  * RapidSMS Code - http://github.com/rapidsms/rapidsms/tree/master
