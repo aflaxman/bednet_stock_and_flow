@@ -107,8 +107,8 @@ W_0 ~ Lognormal(log(1000), 10)
 H_0 ~ Lognormal(log(1000), 10)
 
 s_r ~ Gamma(10., 10./.01)
-s_m ~ Gamma(10., 10./.01)
-s_d ~ Gamma(10., 10./.01)
+s_m ~ Gamma(100., 100./.01)
+s_d ~ Gamma(100., 100./.01)
 
 W[t+1]/W[t] ~ Normal(1., 1.)
 H[t+1]/H[t] ~ Normal(1., 1.)

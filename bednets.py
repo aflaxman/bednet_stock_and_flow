@@ -83,13 +83,38 @@ vars += [p_l, nd, nm, W_0, H_0, W, H]
 
 
    #####################
+  ### additional priors
+ ###
+#####################
+
+# TODO: consider choosing better priors
+s_r = Gamma('standard error in retention rate', 10., 10./.01)
+s_m = Gamma('error in manufacturing data', 100., 100./.01, value=.001)
+s_d = Gamma('error in administrative distribution data', 100., 100./.01, value=.001)
+
+vars += [s_r, s_m, s_d]
+
+@potential
+def smooth_H(H=H):
+    return normal_like(H[:-1] / H[1:], 1., 1.)
+
+@potential
+def smooth_W(W=W):
+    return normal_like(W[:-1] / W[1:], 1., 1.)
+
+@potential
+def positive_stocks(H=H, W=W):
+    return -1000 * (dot(H**2, H < 0) + dot(W**2, W < 0))
+
+vars += [smooth_H, smooth_W, positive_stocks]
+
+
+   #####################
   ### statistical model
  ###
 #####################
 
 ### observed net retention 
-# TODO: consider choosing better priors
-s_r = Gamma('standard error in retention rate', 10., 10./.01)
 
 retention_obs = []
 for d in retention_data:
@@ -101,12 +126,10 @@ for d in retention_data:
         return normal_like(value, (1. - p_l) ** T_i, 1. / s_r**2)
     retention_obs.append(obs)
 
-vars += [s_r, retention_obs]
+vars += [retention_obs]
 
 
 ### observed nets manufactured
-# TODO: consider choosing better priors
-s_m = Gamma('error in manufacturing data', 10., 10./.01)
 
 manufacturing_obs = []
 for d in manufacturing_data:
@@ -119,12 +142,10 @@ for d in manufacturing_data:
         return normal_like(value / nm[year-2000], 1., 1. / s_m**2)
     manufacturing_obs.append(obs)
 
-vars += [s_m, manufacturing_obs]
+vars += [manufacturing_obs]
 
 
 ### observed nets distributed
-# TODO: consider choosing better priors
-s_d = Gamma('standard error in administrative distribution data', 10., 10./.01)
 
 admin_distribution_obs = []
 for d in administrative_distribution_data:
@@ -137,7 +158,7 @@ for d in administrative_distribution_data:
         return normal_like(value / nd[year-2000], 1., 1./ s_d**2)
     admin_distribution_obs.append(obs)
 
-vars += [s_d, admin_distribution_obs]
+vars += [admin_distribution_obs]
 
 
 household_distribution_obs = []
@@ -179,32 +200,20 @@ for d in household_stock_data:
 vars += [household_stock_obs]
 
 
-   #####################
-  ### additional priors
+   #################
+  ### fit the model
  ###
-#####################
-
-@potential
-def smooth_H(H=H):
-    return normal_like(H[:-1] / H[1:], 1., 1.)
-
-@potential
-def smooth_W(W=W):
-    return normal_like(W[:-1] / W[1:], 1., 1.)
-
-@potential
-def positive_stocks(H=H, W=W):
-    return -1000 * (dot(H**2, H < 0) + dot(W**2, W < 0))
-
-vars += [smooth_H, smooth_W, positive_stocks]
-
+#################
 print 'running MCMC...'
 mc = MCMC(vars)
 mc.sample(20000,10000,20)
 
 
-clf()
 
+   ######################
+  ### plot the model fit
+ ###
+######################
 def plot_fit(f, scale=1.e6):
     plot(range(2000,2010), f.stats()['mean']/scale, 'k', linewidth=2, alpha=.9)
     plot(range(2000,2010), f.stats()['quantiles'][2.5]/scale, 'k:', linewidth=2, alpha=.5)
@@ -212,11 +221,11 @@ def plot_fit(f, scale=1.e6):
 
 def scatter_data(data_list, country, country_key, data_key,
                  error_key=None, error_val=None, fmt='gs', scale=1.e6):
-    data_val = [float(d[data_key]) for d in data_list if d[country_key] == c]
+    data_val = array([float(d[data_key]) for d in data_list if d[country_key] == c])
     
     if error_key:
-        error_val = [1.96*float(d[error_key]) \
-                         for d in data_list if d[country_key] == c]
+        error_val = array([1.96*float(d[error_key]) \
+                               for d in data_list if d[country_key] == c])
     elif error_val:
         error_val = 1.96 * error_val * data_val
     errorbar([float(d['Year']) for d in data_list if d[country_key] == c],
@@ -224,7 +233,7 @@ def scatter_data(data_list, country, country_key, data_key,
              error_val/scale, fmt=fmt, alpha=.5)
 
 def decorate_figure():
-    axis([2000,2010,0,10])
+    axis([2000,2010,0,4])
     xticks([2000, 2005, 2010])
 
 def my_hist(stoch):
@@ -234,6 +243,8 @@ def my_hist(stoch):
            linewidth=2, alpha=.5, linestyle='dotted',
            color=['k', 'k', 'r', 'k', 'k'])
     yticks([])
+
+clf()
 
 subplot(2,3,1)
 title('nets manufactured')
