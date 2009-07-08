@@ -27,9 +27,13 @@ The compartments are connected as follows:
 Model parameters
 ----------------
 
-p_l := The probability a net is lost during a time period
-d[t] := the number of nets distributed during time period t
-m[t] := the number of nets manufactured during time period t
+p_l := the probability a net is lost during a time period
+d[t] := the number of nets distributed during time period t (t = 0, ..., 9)
+m[t] := the number of nets manufactured during time period t (t = 0, ..., 9)
+W[0] := the number of nets in warehouses at time 0
+H[0] := the number of nets in households at time 0
+
+(The model for a single country has 23 parameters.)
 
 
 Model Dynamics
@@ -95,7 +99,19 @@ distributed::
 Priors
 ------
 
-To be determined.
+p_l ~ Beta(2, 10)
+d[t] ~ Lognormal(log(mean(d_obs), 1)
+m[t] ~ Lognormal(log(mean(d_obs), 1)
+
+W[t+1]/W[t] ~ Normal(1., 1.)
+H[t+1]/H[t] ~ Normal(1., 1.)
+
+W_0 ~ Lognormal(log(1000), 1)
+H_0 ~ Lognormal(log(1000), 1)
+
+s_r ~ Gamma(10., 10./.01)
+s_m ~ Gamma(10., 10./1.e4)
+s_d ~ Gamma(10., 10./1.e4)
 
 All of the s_x terms in the statistical model above need to be
 assigned hyperpriors.
