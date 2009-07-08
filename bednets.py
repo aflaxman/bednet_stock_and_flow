@@ -4,6 +4,8 @@
 from pylab import *
 from pymc import *
 
+import copy
+
 def load_csv(fname):
     """ Quick function to load each row of a csv file as a dict
     Parameters
@@ -144,6 +146,11 @@ for d in manufacturing_data:
         return normal_like(value / nm[year-2000], 1., 1. / s_m**2)
     manufacturing_obs.append(obs)
 
+    # also take this opportinuty to set better initial values for the MCMC
+    cur_val = copy.copy(nm.value)
+    cur_val[int(d['Year']) - 2000] = float(d['Manu_Itns'])
+    nm.value = cur_val
+
 vars += [manufacturing_obs]
 
 
@@ -181,6 +188,11 @@ for d in household_distribution_data:
                            1./ std_err**2)
     household_distribution_obs.append(obs)
 
+    # also take this opportinuty to set better initial values for the MCMC
+    cur_val = copy.copy(nd.value)
+    cur_val[int(d['Year']) - 2000] = float(d['Survey_Itns'])
+    nd.value = cur_val
+
 vars += [household_distribution_obs]
 
 
@@ -207,8 +219,12 @@ vars += [household_stock_obs]
  ###
 #################
 print 'running MCMC for country %s...' % c
-mc = MCMC(vars)
-mc.sample(20000,10000,20)
+mc = MCMC(vars, verbose=1)
+mc.use_step_method(AdaptiveMetropolis, [nd, nm, W_0, H_0], verbose=0)
+try:
+    mc.sample(20000,10000,20)
+except:
+    pass
 
 
 
