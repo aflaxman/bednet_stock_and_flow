@@ -64,13 +64,13 @@ There are 5 types of data that will drive parameter estimation:
 Manufacturing Data - Information on the number of nets procured by
 each country for distribution;  initial model::
 
-    m_i ~ m(t_i) + N(0, s_m^2)
+    m_i ~ m(t_i) * (1 + N(0, s_m^2))
 
 
 Distribution Data - Information on the number of nets distributed
 through the public sector supply chain in each country;  initial model::
 
-    d1_i ~ d(t_i) + N(0, s_d^2)
+    d1_i ~ d(t_i) * (1 + N(0, s_d^2))
 
 
 Household Survey Data - Information from DHS, MICS, and MIS where
@@ -100,21 +100,20 @@ Priors
 ------
 
 p_l ~ Beta(2, 10)
-d[t] ~ Lognormal(log(mean(d_obs), 1)
-m[t] ~ Lognormal(log(mean(d_obs), 1)
+d[t] ~ Lognormal(log(1000), 1)
+m[t] ~ Lognormal(log(1000), 1)
+
+W_0 ~ Lognormal(log(1000), 10)
+H_0 ~ Lognormal(log(1000), 10)
+
+s_r ~ Gamma(10., 10./.01)
+s_m ~ Gamma(10., 10./.01)
+s_d ~ Gamma(10., 10./.01)
 
 W[t+1]/W[t] ~ Normal(1., 1.)
 H[t+1]/H[t] ~ Normal(1., 1.)
 
-W_0 ~ Lognormal(log(1000), 1)
-H_0 ~ Lognormal(log(1000), 1)
-
-s_r ~ Gamma(10., 10./.01)
-s_m ~ Gamma(10., 10./1.e4)
-s_d ~ Gamma(10., 10./1.e4)
-
-All of the s_x terms in the statistical model above need to be
-assigned hyperpriors.
+W[t], H[t] >= 0
 
 
 Additional Information

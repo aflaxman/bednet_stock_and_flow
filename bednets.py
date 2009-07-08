@@ -56,12 +56,12 @@ vars = []
 p_l = Beta('Pr[net is lost]', alpha=2., beta=10.)
 
 # TODO: consider choosing better priors
-nd = Lognormal('nets distributed', mu=log(nd_avg) * ones(10), tau=1.)
-nm = Lognormal('nets manufactured', mu=log(nd_avg) * ones(10), tau=1.)
+nd = Lognormal('nets distributed', mu=log(1000) * ones(10), tau=1.)
+nm = Lognormal('nets manufactured', mu=log(1000) * ones(10), tau=1.)
 
 # TODO: consider choosing better priors
-W_0 = Lognormal('initial warehouse net stock', mu=log(1000), tau=1.)
-H_0 = Lognormal('initial household net stock', mu=log(1000), tau=1.)
+W_0 = Lognormal('initial warehouse net stock', mu=log(1000), tau=10.)
+H_0 = Lognormal('initial household net stock', mu=log(1000), tau=10.)
 
 @deterministic(name='warehouse net stock')
 def W(W_0=W_0, nm=nm, nd=nd):
@@ -106,7 +106,7 @@ vars += [s_r, retention_obs]
 
 ### observed nets manufactured
 # TODO: consider choosing better priors
-s_m = Gamma('standard error in manufacturing data', 10., 10./1.e4)
+s_m = Gamma('error in manufacturing data', 10., 10./.01)
 
 manufacturing_obs = []
 for d in manufacturing_data:
@@ -116,7 +116,7 @@ for d in manufacturing_data:
     @observed
     @stochastic(name='manufactured_%s_%s' % (d['Country'], d['Year']))
     def obs(value=float(d['Manu_Itns']), year=int(d['Year']), nm=nm, s_m=s_m):
-        return normal_like(value, nm[year-2000], 1. / s_m**2)
+        return normal_like(value / nm[year-2000], 1., 1. / s_m**2)
     manufacturing_obs.append(obs)
 
 vars += [s_m, manufacturing_obs]
@@ -124,7 +124,7 @@ vars += [s_m, manufacturing_obs]
 
 ### observed nets distributed
 # TODO: consider choosing better priors
-s_d = Gamma('standard error in administrative distribution data', 10., 10./1.e4)
+s_d = Gamma('standard error in administrative distribution data', 10., 10./.01)
 
 admin_distribution_obs = []
 for d in administrative_distribution_data:
@@ -134,7 +134,7 @@ for d in administrative_distribution_data:
     @observed
     @stochastic(name='administrative_distribution_%s_%s' % (d['Country'], d['Year']))
     def obs(value=float(d['Program_Itns']), year=int(d['Year']), nd=nd, s_d=s_d):
-        return normal_like(value, nd[year-2000], 1./ s_d**2)
+        return normal_like(value / nd[year-2000], 1., 1./ s_d**2)
     admin_distribution_obs.append(obs)
 
 vars += [s_d, admin_distribution_obs]
@@ -192,6 +192,12 @@ def smooth_H(H=H):
 def smooth_W(W=W):
     return normal_like(W[:-1] / W[1:], 1., 1.)
 
+@potential
+def positive_stocks(H=H, W=W):
+    return -1000 * (dot(H**2, H < 0) + dot(W**2, W < 0))
+
+vars += [smooth_H, smooth_W, positive_stocks]
+
 print 'running MCMC...'
 mc = MCMC(vars)
 mc.sample(20000,10000,20)
@@ -204,13 +210,18 @@ def plot_fit(f, scale=1.e6):
     plot(range(2000,2010), f.stats()['quantiles'][2.5]/scale, 'k:', linewidth=2, alpha=.5)
     plot(range(2000,2010), f.stats()['quantiles'][97.5]/scale, 'k:', linewidth=2, alpha=.5)
 
-def scatter_data(data_list, country, country_key, data_key, error_key=None, error_val=None, fmt='gs', scale=1.e6):
+def scatter_data(data_list, country, country_key, data_key,
+                 error_key=None, error_val=None, fmt='gs', scale=1.e6):
+    data_val = [float(d[data_key]) for d in data_list if d[country_key] == c]
+    
     if error_key:
         error_val = [1.96*float(d[error_key]) \
                          for d in data_list if d[country_key] == c]
+    elif error_val:
+        error_val = 1.96 * error_val * data_val
     errorbar([float(d['Year']) for d in data_list if d[country_key] == c],
-             [float(d[data_key])/scale for d in data_list if d[country_key] == c],
-             array(error_val)/scale, fmt=fmt, alpha=.5)
+             data_val/scale,
+             error_val/scale, fmt=fmt, alpha=.5)
 
 def decorate_figure():
     axis([2000,2010,0,10])
