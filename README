@@ -101,7 +101,7 @@ distributed::
 Priors
 ------
 
-p_l ~ LogitNormal(.05, .5^2)
+p_l ~ logit^{-1}(Normal(.05, 1))
 s_r ~ Gamma(10, 10/.05)
 s_m ~ Gamma(10, 10/.05)
 s_d ~ Gamma(10, 10/.05)

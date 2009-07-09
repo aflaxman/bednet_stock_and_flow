@@ -41,16 +41,26 @@ retention_data = load_csv('retention07072009.csv')
 
 
 ### pick the country of interest
-c = 'Malawi'
+c = 'Angola'
 
 
 ### find some descriptive statistics to use as priors
-nd_all = [float(d['Program_Itns']) for d in administrative_distribution_data if d['Country'] == c]
+nd_all = [float(d['Program_Itns']) for d in administrative_distribution_data \
+              if d['Country'] == c] \
+              + [float(d['Survey_Itns']) for d in household_distribution_data \
+                     if d['Name'] == c and d['Year'] == d['Survey_Year']]
+# if there is no distribution data, make some up
+if len(nd_all) == 0:
+    nd_all = [ 1000 ]
+    
 nd_min = min(nd_all)
 nd_avg = mean(nd_all)
 nd_ste = std(nd_all)
 
 nm_all = [float(d['Manu_Itns']) for d in manufacturing_data if d['Country'] == c]
+# if there is no manufacturing data, make some up
+if len(nm_all) == 0:
+    nm_all = [ 1000 ]
 nm_min = min(nm_all)
 nm_avg = mean(nm_all)
 
@@ -62,7 +72,7 @@ vars = []
  ###
 #######################
 
-logit_p_l = Normal('logit(Pr[net is lost])', mu=logit(.05), tau=1./.5**2)
+logit_p_l = Normal('logit(Pr[net is lost])', mu=logit(.05), tau=1.)
 p_l = InvLogit('Pr[net is lost]', logit_p_l, verbose=1)
 
 ## by commenting out the next line, the MCMC will not try to fit the stoch
@@ -279,16 +289,21 @@ elif method == 'NormApprox':
  ###
 ######################
 def plot_fit(f, scale=1.e6):
-    plot(range(2000,2010), f.stats()['mean']/scale, 'k-', alpha=1., label='Est Mean')
-    #plot(range(2000,2010), f.stats()['quantiles'][2.5]/scale, 'k:', alpha=.95, label='Est 95% UI')
-    #plot(range(2000,2010), f.stats()['quantiles'][97.5]/scale, 'k:', alpha=.95)
+    """ Plot the posterior mean and 95% UI
+    """
+    plot(range(2000,2010), f.stats()['mean']/scale, 'k-', linewidth=2, label='Est Mean')
+
     x = np.concatenate((arange(2000,2010), arange(2000,2010)[::-1]))
     y = np.concatenate((f.stats()['quantiles'][2.5]/scale,
                         f.stats()['quantiles'][97.5][::-1]/scale))
-    fill(x, y, alpha=.95, label='Est 95% UI', facecolor=.8)
+    fill(x, y, alpha=.95, label='Est 95% UI', facecolor='.8', alpha=.5)
 
 def scatter_data(data_list, country, country_key, data_key,
                  error_key=None, error_val=None, fmt='go', scale=1.e6, p_l=None, label=''):
+    """ This convenience function is a little bit of a mess, but it
+    avoids duplicating code for scatter-plotting various types of
+    data, with various types of error bars
+    """
 
     if p_l == None:
         data_val = array([float(d[data_key]) for d in data_list if d[country_key] == c])
@@ -309,12 +324,14 @@ def scatter_data(data_list, country, country_key, data_key,
         
 
 def decorate_figure():
+    """ Set the axis, etc."""
     l,r,b,t = axis()
     vlines(range(2000,2010), 0, t, color=(0,0,0), alpha=.3)
     axis([2000,2009,0,t])
     xticks([2000, 2004, 2008], ['2000', '2004', '2008'])
 
 def my_hist(stoch):
+    """ Plot a histogram of the posterior distribution of a stoch"""
     hist(stoch.trace(), normed=True, log=False)
     l,r,b,t = axis()
     vlines(stoch.stats()['quantiles'].values(), b, t,
@@ -323,6 +340,7 @@ def my_hist(stoch):
     yticks([])
 
 def my_acorr(stoch):
+    """ Plot the autocorrelation of the a stoch trace"""
     vals = copy.copy(stoch.trace())
 
     if shape(vals)[-1] == 1:
@@ -336,12 +354,22 @@ def my_acorr(stoch):
     hlines([0],-8,8, linewidth=2, alpha=.7, linestyle='dotted')
     xticks([])
     yticks([0,1], fontsize=6)
-    
+
+
+### actual plotting code start here
 clf()
 
 cols = 4
 
 for ii, stoch in enumerate([p_l, s_r, s_m, s_d, nm, nd, W, H]):
+    try:
+        if stoch in [p_l, s_r, s_m, s_d]:
+            subplot(8, cols, ii*cols + 3)
+            my_hist(stoch)
+            title(str(stoch), fontsize=8)
+    except Exception, e:
+        print 'Error: ', e
+
     subplot(8, cols*2, 2*cols - 1 + ii*2*cols)
     try:
         plot(stoch.trace(), linewidth=2, alpha=.5)
@@ -362,39 +390,40 @@ for ii, stoch in enumerate([p_l, s_r, s_m, s_d, nm, nd, W, H]):
 subplot(4, cols/2, 1)
 title('nets manufactured', fontsize=8)
 plot_fit(nm)
-try:
-    scatter_data(manufacturing_data, c, 'Country', 'Manu_Itns',
-                 error_val=1.96 * s_m.stats()['quantiles'][97.5])
-except Exception, e:
-    print 'Error: ', e
-    scatter_data(manufacturing_data, c, 'Country', 'Manu_Itns',
-                 error_val=1.96 * s_m.value)
+if len(manufacturing_obs) > 0:
+    try:
+        scatter_data(manufacturing_data, c, 'Country', 'Manu_Itns',
+                     error_val=1.96 * s_m.stats()['quantiles'][97.5])
+    except Exception, e:
+        print 'Error: ', e
+        scatter_data(manufacturing_data, c, 'Country', 'Manu_Itns',
+                     error_val=1.96 * s_m.value)
 decorate_figure()
 
 
 subplot(4, cols/2, 2*(cols/2)+1)
 title('nets distributed', fontsize=8)
 plot_fit(nd)
-
-label = 'Administrative Data'
-try:
-    scatter_data(administrative_distribution_data, c, 'Country', 'Program_Itns',
-                 error_val=1.96 * s_d.stats()['quantiles'][97.5], label=label)
-except Exception, e:
-    print 'Error: ', e
-    scatter_data(administrative_distribution_data, c, 'Country', 'Program_Itns',
-                 error_val=1.96 * s_m.value, label=label)
-
-label = 'Survey Data'
-try:
-    scatter_data(household_distribution_data, c, 'Name', 'Survey_Itns',
-                 error_key='Ste_Survey_Itns', fmt='bs', p_l=p_l.stats()['mean'][0], label=label)
-except Exception, e:
-    print 'Error: ', e
-    scatter_data(household_distribution_data, c, 'Name', 'Survey_Itns',
-                 error_key='Ste_Survey_Itns', fmt='bs', p_l=p_l.value, label=label)
-decorate_figure()
+if len(admin_distribution_obs) > 0:
+    label = 'Administrative Data'
+    try:
+        scatter_data(administrative_distribution_data, c, 'Country', 'Program_Itns',
+                     error_val=1.96 * s_d.stats()['quantiles'][97.5], label=label)
+    except Exception, e:
+        print 'Error: ', e
+        scatter_data(administrative_distribution_data, c, 'Country', 'Program_Itns',
+                     error_val=1.96 * s_m.value, label=label)
+if len(household_distribution_obs) > 0:
+    label = 'Survey Data'
+    try:
+        scatter_data(household_distribution_data, c, 'Name', 'Survey_Itns',
+                     error_key='Ste_Survey_Itns', fmt='bs', p_l=p_l.stats()['mean'][0], label=label)
+    except Exception, e:
+        print 'Error: ', e
+        scatter_data(household_distribution_data, c, 'Name', 'Survey_Itns',
+                     error_key='Ste_Survey_Itns', fmt='bs', p_l=p_l.value, label=label)
 legend(loc='upper left')
+decorate_figure()
 
 
 subplot(4, cols/2, (cols/2)+1)
@@ -406,22 +435,8 @@ decorate_figure()
 subplot(4, cols/2, 3*(cols/2)+1)
 title('nets in households', fontsize=8)
 plot_fit(H)
-scatter_data(household_stock_data, c, 'Name', 'Survey_Itns',
-             error_key='Ste_Survey_Itns', fmt='bs')
+if len(household_stock_obs) > 0:
+    scatter_data(household_stock_data, c, 'Name', 'Survey_Itns',
+                 error_key='Ste_Survey_Itns', fmt='bs')
 decorate_figure()
 
-
-try:
-    subplot(2,cols,3)
-    title(str(p_l), fontsize=8)
-    my_hist(p_l)
-except Exception, e:
-    print 'Error: ', e
-
-for ii, stoch in enumerate([s_r, s_m, s_d]):
-    try:
-        subplot(7, cols, (4 + ii)*cols + 3)
-        my_hist(stoch)
-        title(str(stoch), fontsize=8)
-    except Exception, e:
-        print 'Error: ', e
