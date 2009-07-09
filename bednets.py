@@ -41,7 +41,7 @@ retention_data = load_csv('retention07072009.csv')
 
 
 ### pick the country of interest
-c = 'Zambia'
+c = 'Malawi'
 
 
 ### find some descriptive statistics to use as priors
@@ -62,11 +62,10 @@ vars = []
  ###
 #######################
 
-logit_p_l = Normal('logit(Pr[net is lost])', mu=logit(.05), tau=1./.5**2)
-p_l = InvLogit('Pr[net is lost]', logit_p_l, verbose=1)
+p_l = Beta('Pr[net is lost]', 5, 95)
 
 ## by commenting out the next line, the MCMC will not try to fit the stoch
-vars += [logit_p_l, p_l]
+vars += [p_l]
 
 # TODO: consider choosing better priors
 s_r = Gamma('error in retention rate', 10., 10./.05, value=.05)
@@ -81,8 +80,8 @@ nd = Lognormal('nets distributed', mu=log(nd_avg) * ones(10), tau=1.)
 nm = Lognormal('nets manufactured', mu=log(nm_avg) * ones(10), tau=1.)
 
 # TODO: consider choosing better priors
-W_0 = Lognormal('initial warehouse net stock', mu=log(1.e5), tau=100., value=1.e6)
-H_0 = Lognormal('initial household net stock', mu=log(1000.), tau=1., value=1000.)
+W_0 = Lognormal('initial warehouse net stock', mu=log(1.e5), tau=100., value=1.e5)
+H_0 = Lognormal('initial household net stock', mu=log(1.e5), tau=100., value=1.e5)
 
 @deterministic(name='warehouse net stock')
 def W(W_0=W_0, nm=nm, nd=nd):
@@ -246,25 +245,32 @@ vars += [retention_obs]
  ###
 #################
 print 'running fit for net model in %s...' % c
-mc = MCMC(vars, verbose=1)
-mc.sample(1)
-#mc.use_step_method(AdaptiveMetropolis, [nd, nm, W_0, H_0], verbose=0)
-#mc.use_step_method(AdaptiveMetropolis, nd, verbose=0)
-#mc.use_step_method(AdaptiveMetropolis, nm, verbose=0)
 
-#try:
-#    mc.sample(20000, 15000, 20)
-#except:
-#    pass
+method = 'MCMC'
+#method = 'NormApprox'
 
-na = NormApprox(vars)
-na.fit(method='fmin_powell', tol=.00001, verbose=1)
+if method == 'MCMC':
+    map = MAP(vars)
+    map.fit(method='fmin_powell', verbose=1)
+    for stoch in [s_m, s_d, s_r, p_l]:
+        print '%s: %f' % (stoch, stoch.value)
 
-for stoch in [s_m, s_d, s_r, p_l]:
-    print '%s: %f' % (stoch, stoch.value)
+    mc = MCMC(vars, verbose=1)
+    #mc.use_step_method(AdaptiveMetropolis, [nd, nm, W_0, H_0], verbose=0)
+    #mc.use_step_method(AdaptiveMetropolis, nd, verbose=0)
+    #mc.use_step_method(AdaptiveMetropolis, nm, verbose=0)
 
-na.sample(1000)
+    try:
+        mc.sample(10000, 5000, 100)
+    except:
+        pass
 
+elif method == 'NormApprox':
+    na = NormApprox(vars)
+    na.fit(method='fmin_powell', tol=.00001, verbose=1)
+    for stoch in [s_m, s_d, s_r, p_l]:
+        print '%s: %f' % (stoch, stoch.value)
+    na.sample(1000)
 
 
    ######################
@@ -273,8 +279,8 @@ na.sample(1000)
 ######################
 def plot_fit(f, scale=1.e6):
     plot(range(2000,2010), f.stats()['mean']/scale, 'k-', alpha=1., label='Est Mean')
-    plot(range(2000,2010), f.stats()['quantiles'][2.5]/scale, 'k--', alpha=.8, label='Est 95% UI')
-    plot(range(2000,2010), f.stats()['quantiles'][97.5]/scale, 'k--', alpha=.8)
+    plot(range(2000,2010), f.stats()['quantiles'][2.5]/scale, 'k:', alpha=.95, label='Est 95% UI')
+    plot(range(2000,2010), f.stats()['quantiles'][97.5]/scale, 'k:', alpha=.95)
 
 def scatter_data(data_list, country, country_key, data_key,
                  error_key=None, error_val=None, fmt='go', scale=1.e6, p_l=None, label=''):
@@ -301,18 +307,18 @@ def decorate_figure():
     l,r,b,t = axis()
     vlines(range(2000,2010), 0, t, color=(0,0,0), alpha=.3)
     axis([2000,2009,0,t])
-    xticks([2000, 2004, 208], ['2000', '2004', '2008'])
+    xticks([2000, 2004, 2008], ['2000', '2004', '2008'])
 
 def my_hist(stoch):
     hist(stoch.trace(), normed=True, log=False)
     l,r,b,t = axis()
     vlines(stoch.stats()['quantiles'].values(), b, t,
-           linewidth=2, alpha=.5, linestyle='dotted',
+           linewidth=2, alpha=.75, linestyle='dashed',
            color=['k', 'k', 'r', 'k', 'k'])
     yticks([])
 
 def my_acorr(stoch):
-    vals = stoch.trace()
+    vals = copy.copy(stoch.trace())
 
     if shape(vals)[-1] == 1:
         vals = ravel(vals)
@@ -403,10 +409,7 @@ decorate_figure()
 try:
     subplot(2,cols,3)
     title(str(p_l))
-#    vlines(ravel(p_l.stats()['quantiles'].values()), 1, 1000,
-#           linewidth=2, alpha=.5, linestyle='dashed',
-#           color=['k', 'b', 'r', 'b', 'k'])
-    hist(p_l.trace(), normed=True, log=True)
+    my_hist(p_l)
 except Exception, e:
     print 'Error: ', e
 

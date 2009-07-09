@@ -101,7 +101,7 @@ distributed::
 Priors
 ------
 
-p_l ~ LogitNormal(.05, .5^2)
+p_l ~ Beta(5, 95)
 s_r ~ Gamma(10, 10/.05)
 s_m ~ Gamma(10, 10/.05)
 s_d ~ Gamma(10, 10/.05)
@@ -110,7 +110,7 @@ d[t] ~ Lognormal(log(mean(d1_i)), 1)
 m[t] ~ Lognormal(log(mean(m_i)), 1)
 
 W_0 ~ Lognormal(log(1e5), 100)
-H_0 ~ Lognormal(log(1000), 1)
+H_0 ~ Lognormal(log(1e5), 100)
 
 log(W[t+1]/W[t]) ~ Normal(0, 1^2)
 log(H[t+1]/H[t]) ~ Normal(0, .1^2)
@@ -146,6 +146,6 @@ ITN Info:
   * http://en.wikipedia.org/wiki/Pyrethroid
 
 Supply Chain Software
-  * Review of 4 free systems - http://www.rhsupplies.org/fileadmin/user_upload/SSWG/RHSC-Users_Guide_R14_Final.pdf
+  * Review of 4 free systems - http://www.rhsupplies.org/fileadmin/user_upload/SSWG/RHSC-Users_Guide_R14_Final.pdf - map of countries using software on page 47
   * RapidSMS - http://www.net4nets.net/pdf/63_Million_Bednets_Distributed_with_Rapid_SMS.pdf
   * RapidSMS Code - http://github.com/rapidsms/rapidsms/tree/master
