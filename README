@@ -84,7 +84,7 @@ obtained;  initial model for total number of nets::
 initial model for number of nets obtained during a particular year::
 
     d2_i ~ d(t^e_i) * (1 - p_l)^{t^s_i - t^e_i} 
-             + N(0, s_{d2_i}^2 + ((t^s_i - t^e_i) * s_r)^2)
+             + N(0, (s_{d2_i} * (1 + (t^s_i - t^e_i) * s_r))^2)
         (here t^s_i is the year of the survey, and t^e_i is the year
         of the estimate)
 

@@ -41,7 +41,7 @@ retention_data = load_csv('retention07072009.csv')
 
 
 ### pick the country of interest
-c = 'Angola'
+c = 'Benin'
 
 
 ### find some descriptive statistics to use as priors
@@ -205,7 +205,7 @@ for d in household_distribution_data:
         return normal_like(
             value,
             nd[estimate_year - 2000] * (1 - p_l) ** (survey_year - estimate_year),
-            1./ (survey_err**2 + ((survey_year - estimate_year) * retention_err)**2))
+            1./ (survey_err * (1 + (survey_year - estimate_year) * retention_err))**2)
     household_distribution_obs.append(obs)
 
     # also take this opportinuty to set better initial values for the MCMC
@@ -299,7 +299,8 @@ def plot_fit(f, scale=1.e6):
     fill(x, y, alpha=.95, label='Est 95% UI', facecolor='.8', alpha=.5)
 
 def scatter_data(data_list, country, country_key, data_key,
-                 error_key=None, error_val=None, fmt='go', scale=1.e6, p_l=None, label=''):
+                 error_key=None, error_val=None,  p_l=None, s_r=None,
+                 fmt='go', scale=1.e6, label=''):
     """ This convenience function is a little bit of a mess, but it
     avoids duplicating code for scatter-plotting various types of
     data, with various types of error bars
@@ -314,8 +315,14 @@ def scatter_data(data_list, country, country_key, data_key,
                 for d in data_list if d[country_key] == c])
 
     if error_key:
-        error_val = array([1.96*float(d[error_key]) \
-                               for d in data_list if d[country_key] == c])
+        if s_r == None:
+            error_val = array([1.96*float(d[error_key]) \
+                                   for d in data_list if d[country_key] == c])
+        else:
+            error_val = array([1.96*float(d[error_key])
+                               * (1 + (int(d['Survey_Year']) - int(d['Year'])) * s_r) \
+                                   for d in data_list if d[country_key] == c])
+
     elif error_val:
         error_val = 1.96 * error_val * data_val
     errorbar([float(d['Year']) for d in data_list if d[country_key] == c],
@@ -417,11 +424,15 @@ if len(household_distribution_obs) > 0:
     label = 'Survey Data'
     try:
         scatter_data(household_distribution_data, c, 'Name', 'Survey_Itns',
-                     error_key='Ste_Survey_Itns', fmt='bs', p_l=p_l.stats()['mean'][0], label=label)
+                     error_key='Ste_Survey_Itns', fmt='bs',
+                     p_l=p_l.stats()['mean'][0], s_r=s_r.stats()['mean'],
+                     label=label)
     except Exception, e:
         print 'Error: ', e
         scatter_data(household_distribution_data, c, 'Name', 'Survey_Itns',
-                     error_key='Ste_Survey_Itns', fmt='bs', p_l=p_l.value, label=label)
+                     error_key='Ste_Survey_Itns', fmt='bs',
+                     p_l=p_l.value, s_r=s_r.value,
+                     label=label)
 legend(loc='upper left')
 decorate_figure()
 
