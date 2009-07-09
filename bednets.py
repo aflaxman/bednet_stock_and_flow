@@ -62,7 +62,8 @@ vars = []
  ###
 #######################
 
-p_l = Beta('Pr[net is lost]', 5, 95)
+logit_p_l = Normal('logit(Pr[net is lost])', mu=logit(.05), tau=1./.5**2)
+p_l = InvLogit('Pr[net is lost]', logit_p_l, verbose=1)
 
 ## by commenting out the next line, the MCMC will not try to fit the stoch
 vars += [p_l]
@@ -279,8 +280,12 @@ elif method == 'NormApprox':
 ######################
 def plot_fit(f, scale=1.e6):
     plot(range(2000,2010), f.stats()['mean']/scale, 'k-', alpha=1., label='Est Mean')
-    plot(range(2000,2010), f.stats()['quantiles'][2.5]/scale, 'k:', alpha=.95, label='Est 95% UI')
-    plot(range(2000,2010), f.stats()['quantiles'][97.5]/scale, 'k:', alpha=.95)
+    #plot(range(2000,2010), f.stats()['quantiles'][2.5]/scale, 'k:', alpha=.95, label='Est 95% UI')
+    #plot(range(2000,2010), f.stats()['quantiles'][97.5]/scale, 'k:', alpha=.95)
+    x = np.concatenate((arange(2000,2010), arange(2000,2010)[::-1]))
+    y = np.concatenate((f.stats()['quantiles'][2.5]/scale,
+                        f.stats()['quantiles'][97.5][::-1]/scale))
+    fill(x, y, alpha=.95, label='Est 95% UI', facecolor=.8)
 
 def scatter_data(data_list, country, country_key, data_key,
                  error_key=None, error_val=None, fmt='go', scale=1.e6, p_l=None, label=''):
@@ -355,7 +360,7 @@ for ii, stoch in enumerate([p_l, s_r, s_m, s_d, nm, nd, W, H]):
 
 
 subplot(4, cols/2, 1)
-title('nets manufactured')
+title('nets manufactured', fontsize=8)
 plot_fit(nm)
 try:
     scatter_data(manufacturing_data, c, 'Country', 'Manu_Itns',
@@ -368,7 +373,7 @@ decorate_figure()
 
 
 subplot(4, cols/2, 2*(cols/2)+1)
-title('nets distributed')
+title('nets distributed', fontsize=8)
 plot_fit(nd)
 
 label = 'Administrative Data'
@@ -393,13 +398,13 @@ legend(loc='upper left')
 
 
 subplot(4, cols/2, (cols/2)+1)
-title('nets in warehouse')
+title('nets in warehouse', fontsize=8)
 plot_fit(W)
 decorate_figure()
 
 
 subplot(4, cols/2, 3*(cols/2)+1)
-title('nets in households')
+title('nets in households', fontsize=8)
 plot_fit(H)
 scatter_data(household_stock_data, c, 'Name', 'Survey_Itns',
              error_key='Ste_Survey_Itns', fmt='bs')
@@ -408,14 +413,14 @@ decorate_figure()
 
 try:
     subplot(2,cols,3)
-    title(str(p_l))
+    title(str(p_l), fontsize=8)
     my_hist(p_l)
 except Exception, e:
     print 'Error: ', e
 
 for ii, stoch in enumerate([s_r, s_m, s_d]):
     try:
-        subplot(8, cols, (5 + ii)*cols + 3)
+        subplot(7, cols, (4 + ii)*cols + 3)
         my_hist(stoch)
         title(str(stoch), fontsize=8)
     except Exception, e:
