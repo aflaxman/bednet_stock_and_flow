@@ -106,14 +106,14 @@ s_r ~ Gamma(10, 10/.05)
 s_m ~ Gamma(10, 10/.05)
 s_d ~ Gamma(10, 10/.05)
 
-d[t] ~ Lognormal(log(mean(d1_i)), 1)
-m[t] ~ Lognormal(log(mean(m_i)), 1)
+d[t] ~ Lognormal(log(min_i(d_i)), 1)
+m[t] ~ Lognormal(log(min_i(m_i)), 1)
 
-W_0 ~ Lognormal(log(1e5), 100)
-H_0 ~ Lognormal(log(1e5), 100)
+W_0 ~ Lognormal(log(min_i(d_i)), 100)
+H_0 ~ Lognormal(log(min_i(m_i)), 100)
 
 log(W[t+1]/W[t]) ~ Normal(0, 1^2)
-log(H[t+1]/H[t]) ~ Normal(0, .1^2)
+log(H[t+1]/H[t]) ~ Normal(0, 1^2)
 
 W[t], H[t] >= 0
 

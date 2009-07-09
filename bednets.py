@@ -41,7 +41,7 @@ retention_data = load_csv('retention07072009.csv')
 
 
 ### pick the country of interest
-c = 'Benin'
+c = 'Botswana'
 
 
 ### find some descriptive statistics to use as priors
@@ -76,7 +76,7 @@ logit_p_l = Normal('logit(Pr[net is lost])', mu=logit(.05), tau=1.)
 p_l = InvLogit('Pr[net is lost]', logit_p_l, verbose=1)
 
 ## by commenting out the next line, the MCMC will not try to fit the stoch
-vars += [p_l]
+vars += [logit_p_l, p_l]
 
 # TODO: consider choosing better priors
 s_r = Gamma('error in retention rate', 10., 10./.05, value=.05)
@@ -87,12 +87,12 @@ s_d = Gamma('error in administrative distribution data', 10., 10./.05, value=.05
 vars += [s_r, s_m, s_d]
 
 # TODO: consider choosing better priors
-nd = Lognormal('nets distributed', mu=log(nd_avg) * ones(10), tau=1.)
-nm = Lognormal('nets manufactured', mu=log(nm_avg) * ones(10), tau=1.)
+nd = Lognormal('nets distributed', mu=log(nd_min) * ones(10), tau=1.)
+nm = Lognormal('nets manufactured', mu=log(nm_min) * ones(10), tau=1.)
 
 # TODO: consider choosing better priors
-W_0 = Lognormal('initial warehouse net stock', mu=log(1.e5), tau=100., value=1.e5)
-H_0 = Lognormal('initial household net stock', mu=log(1.e5), tau=100., value=1.e5)
+W_0 = Lognormal('initial warehouse net stock', mu=log(nd_min), tau=1., value=nd_min)
+H_0 = Lognormal('initial household net stock', mu=log(nm_min), tau=1., value=nm_min)
 
 @deterministic(name='warehouse net stock')
 def W(W_0=W_0, nm=nm, nd=nd):
@@ -127,7 +127,7 @@ def smooth_W(W=W):
 
 @potential
 def smooth_H(H=H):
-    return normal_like(diff(log(maximum(H,10000))), 0., 1. / (.1)**2)
+    return normal_like(diff(log(maximum(H,10000))), 0., 1. / (1.)**2)
 
 @potential
 def positive_stocks(H=H, W=W):
@@ -335,13 +335,14 @@ def decorate_figure():
     l,r,b,t = axis()
     vlines(range(2000,2010), 0, t, color=(0,0,0), alpha=.3)
     axis([2000,2009,0,t])
-    xticks([2000, 2004, 2008], ['2000', '2004', '2008'])
+    ylabel('# of Nets (Millions)', fontsize=9)
+    xticks([2001, 2003, 2005, 2007], ['2001', '2003', '2005', '2007'], fontsize=9)
 
 def my_hist(stoch):
     """ Plot a histogram of the posterior distribution of a stoch"""
     hist(stoch.trace(), normed=True, log=False)
     l,r,b,t = axis()
-    vlines(stoch.stats()['quantiles'].values(), b, t,
+    vlines(ravel(stoch.stats()['quantiles'].values()), b, t,
            linewidth=2, alpha=.75, linestyle='dashed',
            color=['k', 'k', 'r', 'k', 'k'])
     yticks([])
@@ -371,7 +372,7 @@ cols = 4
 for ii, stoch in enumerate([p_l, s_r, s_m, s_d, nm, nd, W, H]):
     try:
         if stoch in [p_l, s_r, s_m, s_d]:
-            subplot(8, cols, ii*cols + 3)
+            subplot(4, cols, ii*cols + 3)
             my_hist(stoch)
             title(str(stoch), fontsize=8)
     except Exception, e:
