@@ -57,11 +57,11 @@ vars = []
  ###
 #######################
 
-p_l = Beta('Pr[net is lost]', alpha=1., beta=99., value=.01)
+p_l = Beta('Pr[net is lost]', alpha=1.e5, beta=1.e6, value=.1)
 
 # TODO: consider choosing better priors
 s_r = Gamma('error in retention rate', 10., 10./.03)
-s_m = Gamma('error in manufacturing data', 10., 10./.03, value=.03)
+s_m = Gamma('error in manufacturing data', 10., 10./.1, value=.1)
 s_d = Gamma('error in administrative distribution data', 10., 10./.03, value=.03)
 
 vars += [s_r, s_m, s_d]
@@ -227,8 +227,8 @@ vars += [household_stock_obs]
 print 'running MCMC for country %s...' % c
 mc = MCMC(vars, verbose=1)
 #mc.use_step_method(AdaptiveMetropolis, [nd, nm, W_0, H_0], verbose=0)
-mc.use_step_method(AdaptiveMetropolis, nd, verbose=0)
-mc.use_step_method(AdaptiveMetropolis, nm, verbose=0)
+#mc.use_step_method(AdaptiveMetropolis, nd, verbose=0)
+#mc.use_step_method(AdaptiveMetropolis, nm, verbose=0)
 try:
     mc.sample(20000,10000,20)
 except:
@@ -278,13 +278,24 @@ def my_acorr(stoch):
 
     vals -= mean(vals)
     acorr(vals, normed=True, maxlags=min(8, len(vals)))
-    hlines([0],-8,8)
+    hlines([0],-8,8, linewidth=2, alpha=.7, linestyle='dotted')
     xticks([])
-    yticks([])
+    yticks([0,1], fontsize=6)
     
 clf()
 
 cols = 4
+
+for ii, stoch in enumerate([p_l, s_r, s_m, s_d, nm, nd, W, H]):
+    subplot(8, cols*2, 2*cols - 1 + ii*2*cols)
+    plot(stoch.trace(), linewidth=2, alpha=.5)
+    xticks([])
+    yticks([])
+    title(str(stoch), fontsize=6)
+
+    subplot(8, cols*2, 2*cols + ii*2*cols)
+    my_acorr(stoch)
+
 
 subplot(2,cols,1)
 title('nets manufactured')
@@ -328,13 +339,3 @@ for ii, stoch in enumerate([s_r, s_m, s_d]):
     subplot(8, cols, (5 + ii)*cols + 3)
     my_hist(stoch)
     title(str(stoch), fontsize=8)
-
-for ii, stoch in enumerate([p_l, s_r, s_m, s_d, nm, nd, W, H]):
-    subplot(8, cols*2, 2*cols - 1 + ii*2*cols)
-    plot(stoch.trace(), linewidth=2, alpha=.5)
-    xticks([])
-    yticks([])
-    title(str(stoch), fontsize=6)
-
-    subplot(8, cols*2, 2*cols + ii*2*cols)
-    my_acorr(stoch)
