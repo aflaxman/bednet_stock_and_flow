@@ -43,36 +43,46 @@ retention_data = load_csv('retention07072009.csv')
 ### pick the country of interest
 c = 'Zambia'
 
-### find some averages to use as priors
-nd_all = [float(d['Program_Itns']) for d in administrative_distribution_data \
-             if d['Country'] == c]
+
+### find some descriptive statistics to use as priors
+nd_all = [float(d['Program_Itns']) for d in administrative_distribution_data if d['Country'] == c]
+nd_min = min(nd_all)
 nd_avg = mean(nd_all)
 nd_ste = std(nd_all)
 
+nm_all = [float(d['Manu_Itns']) for d in manufacturing_data if d['Country'] == c]
+nm_min = min(nm_all)
+nm_avg = mean(nm_all)
+
+
 ### setup the model variables
 vars = []
-
    #######################
   ### compartmental model
  ###
 #######################
 
-p_l = Beta('Pr[net is lost]', alpha=1.e5, beta=1.e6, value=.1)
+logit_p_l = Normal('logit(Pr[net is lost])', mu=logit(.05), tau=1./.5**2)
+p_l = InvLogit('Pr[net is lost]', logit_p_l, verbose=1)
+
+## by commenting out the next line, the MCMC will not try to fit the stoch
+vars += [logit_p_l, p_l]
 
 # TODO: consider choosing better priors
-s_r = Gamma('error in retention rate', 10., 10./.03)
-s_m = Gamma('error in manufacturing data', 10., 10./.1, value=.1)
-s_d = Gamma('error in administrative distribution data', 10., 10./.03, value=.03)
+s_r = Gamma('error in retention rate', 10., 10./.05, value=.05)
+s_m = Gamma('error in manufacturing data', 10., 10./.05, value=.05)
+s_d = Gamma('error in administrative distribution data', 10., 10./.05, value=.05)
 
+## by commenting out the next line, the MCMC will not try to fit the stoch
 vars += [s_r, s_m, s_d]
 
 # TODO: consider choosing better priors
-nd = Lognormal('nets distributed', mu=log(1000) * ones(10), tau=1.)
-nm = Lognormal('nets manufactured', mu=log(1000) * ones(10), tau=1.)
+nd = Lognormal('nets distributed', mu=log(nd_avg) * ones(10), tau=1.)
+nm = Lognormal('nets manufactured', mu=log(nm_avg) * ones(10), tau=1.)
 
 # TODO: consider choosing better priors
-W_0 = Lognormal('initial warehouse net stock', mu=log(1000), tau=10., value=1000.)
-H_0 = Lognormal('initial household net stock', mu=log(1000), tau=10., value=1000.)
+W_0 = Lognormal('initial warehouse net stock', mu=log(1.e5), tau=100., value=1.e6)
+H_0 = Lognormal('initial household net stock', mu=log(1000.), tau=1., value=1000.)
 
 @deterministic(name='warehouse net stock')
 def W(W_0=W_0, nm=nm, nd=nd):
@@ -90,8 +100,11 @@ def H(H_0=H_0, nd=nd, p_l=p_l):
         H[t+1] = H[t] * (1 - p_l) + nd[t]
     return H
 
-vars += [p_l, nd, nm, W_0, H_0, W, H]
+vars += [nd, nm, W_0, H_0, W, H]
 
+# set initial condition on W_0 to have no stockouts
+if min(W.value) < 0:
+    W_0.value = W_0.value - 2*min(W.value)
 
    #####################
   ### additional priors
@@ -99,12 +112,12 @@ vars += [p_l, nd, nm, W_0, H_0, W, H]
 #####################
 
 @potential
-def smooth_H(H=H):
-    return normal_like(H[:-1] / H[1:], 1., 1000.)
+def smooth_W(W=W):
+    return normal_like(diff(log(maximum(W,10000))), 0., 1. / (1.)**2)
 
 @potential
-def smooth_W(W=W):
-    return normal_like(W[:-1] / W[1:], 1., 1000.)
+def smooth_H(H=H):
+    return normal_like(diff(log(maximum(H,10000))), 0., 1. / (.1)**2)
 
 @potential
 def positive_stocks(H=H, W=W):
@@ -117,20 +130,6 @@ vars += [smooth_H, smooth_W, positive_stocks]
   ### statistical model
  ###
 #####################
-
-### observed net retention 
-
-retention_obs = []
-for d in retention_data:
-    @observed
-    @stochastic(name='retention_%s_%s' % (d['Name'], d['Year']))
-    def obs(value=float(d['Retention_Rate']),
-            T_i=float(d['Follow_up_Time']),
-            p_l=p_l, s_r=s_r):
-        return normal_like(value, (1. - p_l) ** T_i, 1. / s_r**2)
-    retention_obs.append(obs)
-
-vars += [retention_obs]
 
 
 ### observed nets manufactured
@@ -152,6 +151,7 @@ for d in manufacturing_data:
     nm.value = cur_val
 
 vars += [manufacturing_obs]
+
 
 
 ### observed nets distributed
@@ -180,26 +180,31 @@ for d in household_distribution_data:
     if d['Name'] != c:
         continue
 
+    d2_i = float(d['Survey_Itns'])
+    estimate_year = int(d['Year'])
+    survey_year = int(d['Survey_Year'])
+    s_d2_i = float(d['Ste_Survey_Itns'])
     @observed
     @stochastic(name='household_distribution_%s_%s' % (d['Name'], d['Year']))
-    def obs(value=float(d['Survey_Itns']),
-            estimate_year=int(d['Year']),
-            survey_year=int(d['Survey_Year']),
-            std_err=float(d['Ste_Survey_Itns']),
+    def obs(value=d2_i,
+            estimate_year=estimate_year,
+            survey_year=survey_year,
+            survey_err=s_d2_i,
+            retention_err=s_r,
             nd=nd, p_l=p_l):
-        return normal_like(value,
-                           nd[estimate_year - 2000] * \
-                               (1 - p_l) ** (survey_year - estimate_year),
-                           1./ std_err**2)
+        return normal_like(
+            value,
+            nd[estimate_year - 2000] * (1 - p_l) ** (survey_year - estimate_year),
+            1./ (survey_err**2 + ((survey_year - estimate_year) * retention_err)**2))
     household_distribution_obs.append(obs)
 
     # also take this opportinuty to set better initial values for the MCMC
     cur_val = copy.copy(nd.value)
-    cur_val[int(d['Year']) - 2000] = float(d['Survey_Itns']) \
-        / (1 - p_l.value) ** (int(d['Year']) - int(d['Survey_Year']))
+    cur_val[estimate_year - 2000] = d2_i / (1 - p_l.value)**(survey_year - estimate_year)
     nd.value = cur_val
 
 vars += [household_distribution_obs]
+
 
 
 ### observed household net stocks
@@ -214,25 +219,51 @@ for d in household_stock_data:
             year=int(d['Year']),
             std_err=float(d['Ste_Survey_Itns']),
             H=H):
-        return normal_like(value, H[year-2000], 1./ std_err**2)
+        return normal_like(value, H[year-2000], 1. / std_err ** 2)
     household_stock_obs.append(obs)
 
 vars += [household_stock_obs]
+
+
+### observed net retention 
+
+retention_obs = []
+for d in retention_data:
+    @observed
+    @stochastic(name='retention_%s_%s' % (d['Name'], d['Year']))
+    def obs(value=float(d['Retention_Rate']),
+            T_i=float(d['Follow_up_Time']),
+            p_l=p_l, s_r=s_r):
+        return normal_like(value, (1. - p_l) ** T_i, 1. / s_r**2)
+    retention_obs.append(obs)
+
+vars += [retention_obs]
+
 
 
    #################
   ### fit the model
  ###
 #################
-print 'running MCMC for country %s...' % c
+print 'running fit for net model in %s...' % c
 mc = MCMC(vars, verbose=1)
+mc.sample(1)
 #mc.use_step_method(AdaptiveMetropolis, [nd, nm, W_0, H_0], verbose=0)
 #mc.use_step_method(AdaptiveMetropolis, nd, verbose=0)
 #mc.use_step_method(AdaptiveMetropolis, nm, verbose=0)
-try:
-    mc.sample(20000,10000,20)
-except:
-    pass
+
+#try:
+#    mc.sample(20000, 15000, 20)
+#except:
+#    pass
+
+na = NormApprox(vars)
+na.fit(method='fmin_powell', tol=.00001, verbose=1)
+
+for stoch in [s_m, s_d, s_r, p_l]:
+    print '%s: %f' % (stoch, stoch.value)
+
+na.sample(1000)
 
 
 
@@ -241,14 +272,21 @@ except:
  ###
 ######################
 def plot_fit(f, scale=1.e6):
-    plot(range(2000,2010), f.stats()['mean']/scale, 'k', linewidth=2, alpha=.9)
-    plot(range(2000,2010), f.stats()['quantiles'][2.5]/scale, 'k:', linewidth=2, alpha=.5)
-    plot(range(2000,2010), f.stats()['quantiles'][97.5]/scale, 'k:', linewidth=2, alpha=.5)
+    plot(range(2000,2010), f.stats()['mean']/scale, 'k-', alpha=1., label='Est Mean')
+    plot(range(2000,2010), f.stats()['quantiles'][2.5]/scale, 'k--', alpha=.8, label='Est 95% UI')
+    plot(range(2000,2010), f.stats()['quantiles'][97.5]/scale, 'k--', alpha=.8)
 
 def scatter_data(data_list, country, country_key, data_key,
-                 error_key=None, error_val=None, fmt='gs', scale=1.e6):
-    data_val = array([float(d[data_key]) for d in data_list if d[country_key] == c])
-    
+                 error_key=None, error_val=None, fmt='go', scale=1.e6, p_l=None, label=''):
+
+    if p_l == None:
+        data_val = array([float(d[data_key]) for d in data_list if d[country_key] == c])
+    else:
+        # account for the nets lost prior to survey
+        data_val = array([
+                float(d[data_key]) / (1-p_l)**(int(d['Survey_Year']) - int(d['Year']))
+                for d in data_list if d[country_key] == c])
+
     if error_key:
         error_val = array([1.96*float(d[error_key]) \
                                for d in data_list if d[country_key] == c])
@@ -256,11 +294,14 @@ def scatter_data(data_list, country, country_key, data_key,
         error_val = 1.96 * error_val * data_val
     errorbar([float(d['Year']) for d in data_list if d[country_key] == c],
              data_val/scale,
-             error_val/scale, fmt=fmt, alpha=.5)
+             error_val/scale, fmt=fmt, alpha=.95, label=label)
+        
 
 def decorate_figure():
-    axis([2000,2010,0,4])
-    xticks([2000, 2005, 2010])
+    l,r,b,t = axis()
+    vlines(range(2000,2010), 0, t, color=(0,0,0), alpha=.3)
+    axis([2000,2009,0,t])
+    xticks([2000, 2004, 208], ['2000', '2004', '2008'])
 
 def my_hist(stoch):
     hist(stoch.trace(), normed=True, log=False)
@@ -273,6 +314,9 @@ def my_hist(stoch):
 def my_acorr(stoch):
     vals = stoch.trace()
 
+    if shape(vals)[-1] == 1:
+        vals = ravel(vals)
+    
     if len(shape(vals)) > 1:
         vals = vals[5]
 
@@ -288,54 +332,88 @@ cols = 4
 
 for ii, stoch in enumerate([p_l, s_r, s_m, s_d, nm, nd, W, H]):
     subplot(8, cols*2, 2*cols - 1 + ii*2*cols)
-    plot(stoch.trace(), linewidth=2, alpha=.5)
+    try:
+        plot(stoch.trace(), linewidth=2, alpha=.5)
+    except Exception, e:
+        print 'Error: ', e
+
     xticks([])
     yticks([])
     title(str(stoch), fontsize=6)
-
+        
     subplot(8, cols*2, 2*cols + ii*2*cols)
-    my_acorr(stoch)
+    try:
+        my_acorr(stoch)
+    except Exception, e:
+        print 'Error: ', e
 
 
-subplot(2,cols,1)
+subplot(4, cols/2, 1)
 title('nets manufactured')
 plot_fit(nm)
-scatter_data(manufacturing_data, c, 'Country', 'Manu_Itns',
-             error_val=1.96 * s_m.stats()['mean'])
+try:
+    scatter_data(manufacturing_data, c, 'Country', 'Manu_Itns',
+                 error_val=1.96 * s_m.stats()['quantiles'][97.5])
+except Exception, e:
+    print 'Error: ', e
+    scatter_data(manufacturing_data, c, 'Country', 'Manu_Itns',
+                 error_val=1.96 * s_m.value)
 decorate_figure()
 
 
-subplot(2,cols,2)
+subplot(4, cols/2, 2*(cols/2)+1)
 title('nets distributed')
 plot_fit(nd)
-scatter_data(administrative_distribution_data, c, 'Country', 'Program_Itns',
-             error_val=1.96 * s_d.stats()['mean'])
-scatter_data(household_distribution_data, c, 'Name', 'Survey_Itns',
-             error_key='Ste_Survey_Itns', fmt='bs')
+
+label = 'Administrative Data'
+try:
+    scatter_data(administrative_distribution_data, c, 'Country', 'Program_Itns',
+                 error_val=1.96 * s_d.stats()['quantiles'][97.5], label=label)
+except Exception, e:
+    print 'Error: ', e
+    scatter_data(administrative_distribution_data, c, 'Country', 'Program_Itns',
+                 error_val=1.96 * s_m.value, label=label)
+
+label = 'Survey Data'
+try:
+    scatter_data(household_distribution_data, c, 'Name', 'Survey_Itns',
+                 error_key='Ste_Survey_Itns', fmt='bs', p_l=p_l.stats()['mean'][0], label=label)
+except Exception, e:
+    print 'Error: ', e
+    scatter_data(household_distribution_data, c, 'Name', 'Survey_Itns',
+                 error_key='Ste_Survey_Itns', fmt='bs', p_l=p_l.value, label=label)
 decorate_figure()
+legend(loc='upper left')
 
 
-subplot(2,cols,cols+1)
+subplot(4, cols/2, (cols/2)+1)
 title('nets in warehouse')
 plot_fit(W)
 decorate_figure()
 
 
-subplot(2,cols,cols+2)
+subplot(4, cols/2, 3*(cols/2)+1)
 title('nets in households')
 plot_fit(H)
 scatter_data(household_stock_data, c, 'Name', 'Survey_Itns',
              error_key='Ste_Survey_Itns', fmt='bs')
 decorate_figure()
 
-subplot(2,cols,3)
-title(str(p_l))
-vlines(p_l.stats()['quantiles'].values(), 1, 1000,
-       linewidth=2, alpha=.5, linestyle='dashed',
-       color=['k', 'b', 'r', 'b', 'k'])
-hist(p_l.trace(), normed=True, log=True)
+
+try:
+    subplot(2,cols,3)
+    title(str(p_l))
+#    vlines(ravel(p_l.stats()['quantiles'].values()), 1, 1000,
+#           linewidth=2, alpha=.5, linestyle='dashed',
+#           color=['k', 'b', 'r', 'b', 'k'])
+    hist(p_l.trace(), normed=True, log=True)
+except Exception, e:
+    print 'Error: ', e
 
 for ii, stoch in enumerate([s_r, s_m, s_d]):
-    subplot(8, cols, (5 + ii)*cols + 3)
-    my_hist(stoch)
-    title(str(stoch), fontsize=8)
+    try:
+        subplot(8, cols, (5 + ii)*cols + 3)
+        my_hist(stoch)
+        title(str(stoch), fontsize=8)
+    except Exception, e:
+        print 'Error: ', e

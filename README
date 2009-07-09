@@ -67,8 +67,9 @@ each country for distribution;  initial model::
     m_i ~ m(t_i) * (1 + N(0, s_m^2))
 
 
-Distribution Data - Information on the number of nets distributed
-through the public sector supply chain in each country;  initial model::
+Administrative Distribution Data - Information on the number of nets
+distributed through the public sector supply chain in each country;
+initial model::
 
     d1_i ~ d(t_i) * (1 + N(0, s_d^2))
 
@@ -82,7 +83,8 @@ obtained;  initial model for total number of nets::
 
 initial model for number of nets obtained during a particular year::
 
-    d2_i ~ d(t^e_i) * (1 - p_l)^{t^s_i - t^e_i} + N(0, s_{d2_i}^2)
+    d2_i ~ d(t^e_i) * (1 - p_l)^{t^s_i - t^e_i} 
+             + N(0, s_{d2_i}^2 + ((t^s_i - t^e_i) * s_r)^2)
         (here t^s_i is the year of the survey, and t^e_i is the year
         of the estimate)
 
@@ -99,19 +101,19 @@ distributed::
 Priors
 ------
 
-p_l ~ Beta(10, 990)
-d[t] ~ Lognormal(log(1000), 1)
-m[t] ~ Lognormal(log(1000), 1)
+p_l ~ LogitNormal(.05, .5^2)
+s_r ~ Gamma(10, 10/.05)
+s_m ~ Gamma(10, 10/.05)
+s_d ~ Gamma(10, 10/.05)
 
-W_0 ~ Lognormal(log(1000), 10)
-H_0 ~ Lognormal(log(1000), 10)
+d[t] ~ Lognormal(log(mean(d1_i)), 1)
+m[t] ~ Lognormal(log(mean(m_i)), 1)
 
-s_r ~ Gamma(100, 100/.03)
-s_m ~ Gamma(100, 100/.03)
-s_d ~ Gamma(100, 100/.03)
+W_0 ~ Lognormal(log(1e5), 100)
+H_0 ~ Lognormal(log(1000), 1)
 
-W[t+1]/W[t] ~ Normal(1, 1000)
-H[t+1]/H[t] ~ Normal(1, 1000)
+log(W[t+1]/W[t]) ~ Normal(0, 1^2)
+log(H[t+1]/H[t]) ~ Normal(0, .1^2)
 
 W[t], H[t] >= 0
 
