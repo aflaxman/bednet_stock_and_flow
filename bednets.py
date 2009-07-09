@@ -195,7 +195,8 @@ for d in household_distribution_data:
 
     # also take this opportinuty to set better initial values for the MCMC
     cur_val = copy.copy(nd.value)
-    cur_val[int(d['Year']) - 2000] = float(d['Survey_Itns'])
+    cur_val[int(d['Year']) - 2000] = float(d['Survey_Itns']) \
+        / (1 - p_l.value) ** (int(d['Year']) - int(d['Survey_Year']))
     nd.value = cur_val
 
 vars += [household_distribution_obs]
