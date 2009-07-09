@@ -57,7 +57,14 @@ vars = []
  ###
 #######################
 
-p_l = Beta('Pr[net is lost]', alpha=10., beta=990., value=.01)
+p_l = Beta('Pr[net is lost]', alpha=1., beta=99., value=.01)
+
+# TODO: consider choosing better priors
+s_r = Gamma('error in retention rate', 10., 10./.03)
+s_m = Gamma('error in manufacturing data', 10., 10./.03, value=.03)
+s_d = Gamma('error in administrative distribution data', 10., 10./.03, value=.03)
+
+vars += [s_r, s_m, s_d]
 
 # TODO: consider choosing better priors
 nd = Lognormal('nets distributed', mu=log(1000) * ones(10), tau=1.)
@@ -91,20 +98,13 @@ vars += [p_l, nd, nm, W_0, H_0, W, H]
  ###
 #####################
 
-# TODO: consider choosing better priors
-s_r = Gamma('standard error in retention rate', 10., 10./.01)
-s_m = Gamma('error in manufacturing data', 1000., 1000./.03, value=.03)
-s_d = Gamma('error in administrative distribution data', 1000., 1000./.03, value=.03)
-
-vars += [s_r, s_m, s_d]
-
 @potential
 def smooth_H(H=H):
-    return normal_like(H[:-1] / H[1:], 1., 100.)
+    return normal_like(H[:-1] / H[1:], 1., 1000.)
 
 @potential
 def smooth_W(W=W):
-    return normal_like(W[:-1] / W[1:], 1., 100.)
+    return normal_like(W[:-1] / W[1:], 1., 1000.)
 
 @potential
 def positive_stocks(H=H, W=W):
@@ -167,6 +167,11 @@ for d in administrative_distribution_data:
         return normal_like(value / nd[year-2000], 1., 1. / s_d**2)
     admin_distribution_obs.append(obs)
 
+    # also take this opportinuty to set better initial values for the MCMC
+    cur_val = copy.copy(nd.value)
+    cur_val[int(d['Year']) - 2000] = float(d['Program_Itns'])
+    nd.value = cur_val
+
 vars += [admin_distribution_obs]
 
 
@@ -220,7 +225,9 @@ vars += [household_stock_obs]
 #################
 print 'running MCMC for country %s...' % c
 mc = MCMC(vars, verbose=1)
-mc.use_step_method(AdaptiveMetropolis, [nd, nm, W_0, H_0], verbose=0)
+#mc.use_step_method(AdaptiveMetropolis, [nd, nm, W_0, H_0], verbose=0)
+mc.use_step_method(AdaptiveMetropolis, nd, verbose=0)
+mc.use_step_method(AdaptiveMetropolis, nm, verbose=0)
 try:
     mc.sample(20000,10000,20)
 except:
@@ -266,10 +273,11 @@ def my_acorr(stoch):
     vals = stoch.trace()
 
     if len(shape(vals)) > 1:
-        vals = vals[0]
+        vals = vals[5]
 
     vals -= mean(vals)
     acorr(vals, normed=True, maxlags=min(8, len(vals)))
+    hlines([0],-8,8)
     xticks([])
     yticks([])
     
@@ -320,7 +328,7 @@ for ii, stoch in enumerate([s_r, s_m, s_d]):
     my_hist(stoch)
     title(str(stoch), fontsize=8)
 
-for ii, stoch in enumerate([p_l, nm, nd, W, H, s_r, s_m, s_d]):
+for ii, stoch in enumerate([p_l, s_r, s_m, s_d, nm, nd, W, H]):
     subplot(8, cols*2, 2*cols - 1 + ii*2*cols)
     plot(stoch.trace(), linewidth=2, alpha=.5)
     xticks([])

@@ -106,12 +106,12 @@ m[t] ~ Lognormal(log(1000), 1)
 W_0 ~ Lognormal(log(1000), 10)
 H_0 ~ Lognormal(log(1000), 10)
 
-s_r ~ Gamma(10., 10./.01)
-s_m ~ Gamma(100., 100./.001)
-s_d ~ Gamma(100., 100./.001)
+s_r ~ Gamma(100, 100/.03)
+s_m ~ Gamma(100, 100/.03)
+s_d ~ Gamma(100, 100/.03)
 
-W[t+1]/W[t] ~ Normal(1., 100.)
-H[t+1]/H[t] ~ Normal(1., 100.)
+W[t+1]/W[t] ~ Normal(1, 1000)
+H[t+1]/H[t] ~ Normal(1, 1000)
 
 W[t], H[t] >= 0
 
