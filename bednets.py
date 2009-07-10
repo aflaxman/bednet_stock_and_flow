@@ -102,7 +102,7 @@ for c in sorted(country_set):
     def W(W_0=W_0, nm=nm, nd=nd):
         W = zeros(year_end-year_start)
         W[0] = W_0
-        for t in range(9):
+        for t in range(year_end - year_start - 1):
             W[t+1] = W[t] + nm[t] - nd[t]
         return W
 
@@ -110,7 +110,7 @@ for c in sorted(country_set):
     def H(H_0=H_0, nd=nd, p_l=p_l):
         H = zeros(year_end-year_start)
         H[0] = H_0
-        for t in range(9):
+        for t in range(year_end - year_start - 1):
             H[t+1] = H[t] * (1 - p_l) + nd[t]
         return H
 
@@ -426,7 +426,7 @@ for c in sorted(country_set):
     if len(manufacturing_obs) > 0:
         try:
             scatter_data(manufacturing_data, c, 'Country', 'Manu_Itns',
-                         error_val=1.96 * s_m.stats()['quantiles'][97.5])
+                         error_val=1.96 * s_m.stats()['mean'])
         except Exception, e:
             print 'Error: ', e
             scatter_data(manufacturing_data, c, 'Country', 'Manu_Itns',
@@ -441,7 +441,7 @@ for c in sorted(country_set):
         label = 'Administrative Data'
         try:
             scatter_data(administrative_distribution_data, c, 'Country', 'Program_Itns',
-                         error_val=1.96 * s_d.stats()['quantiles'][97.5], label=label)
+                         error_val=1.96 * s_d.stats()['mean'], label=label)
         except Exception, e:
             print 'Error: ', e
             scatter_data(administrative_distribution_data, c, 'Country', 'Program_Itns',
