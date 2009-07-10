@@ -101,16 +101,16 @@ distributed::
 Priors
 ------
 
-p_l ~ logit^{-1}(Normal(.05, 1))
-s_r ~ Gamma(10, 10/.05)
-s_m ~ Gamma(10, 10/.05)
-s_d ~ Gamma(10, 10/.05)
+p_l ~ logit^{-1}(Normal(logit(.05), tau=10))
+s_r ~ Gamma(20, 20/.05)
+s_m ~ Gamma(20, 20/.05)
+s_d ~ Gamma(20, 20/.05)
 
 d[t] ~ Lognormal(log(min_i(d_i)), 1)
 m[t] ~ Lognormal(log(min_i(m_i)), 1)
 
-W_0 ~ Lognormal(log(min_i(d_i)), 100)
-H_0 ~ Lognormal(log(min_i(m_i)), 100)
+W_0 ~ Lognormal(log(1000), 10)
+H_0 ~ Lognormal(log(1000), 10)
 
 log(W[t+1]/W[t]) ~ Normal(0, 1^2)
 log(H[t+1]/H[t]) ~ Normal(0, 1^2)

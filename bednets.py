@@ -54,7 +54,7 @@ for c in sorted(country_set):
                          if d['Name'] == c and d['Year'] == d['Survey_Year']]
     # if there is no distribution data, make some up
     if len(nd_all) == 0:
-        nd_all = [ 1000 ]
+        nd_all = [ 1000. ]
 
     nd_min = min(nd_all)
     nd_avg = mean(nd_all)
@@ -63,7 +63,7 @@ for c in sorted(country_set):
     nm_all = [float(d['Manu_Itns']) for d in manufacturing_data if d['Country'] == c]
     # if there is no manufacturing data, make some up
     if len(nm_all) == 0:
-        nm_all = [ 1000 ]
+        nm_all = [ 1000. ]
     nm_min = min(nm_all)
     nm_avg = mean(nm_all)
 
@@ -75,27 +75,24 @@ for c in sorted(country_set):
      ###
     #######################
 
-    logit_p_l = Normal('logit(Pr[net is lost])', mu=logit(.05), tau=1.)
+    logit_p_l = Normal('logit(Pr[net is lost])', mu=logit(.05), tau=10.)
     p_l = InvLogit('Pr[net is lost]', logit_p_l, verbose=1)
 
-    ## by commenting out the next line, the MCMC will not try to fit the stoch
     vars += [logit_p_l, p_l]
 
-    # TODO: consider choosing better priors
-    s_r = Gamma('error in retention rate', 10., 10./.05, value=.05)
-    s_m = Gamma('error in manufacturing data', 10., 10./.05, value=.05)
-    s_d = Gamma('error in administrative distribution data', 10., 10./.05, value=.05)
+    
+    s_r = Gamma('error in retention rate', 20., 20./.05, value=.05)
+    s_m = Gamma('error in manufacturing data', 20., 20./.05, value=.05)
+    s_d = Gamma('error in administrative distribution data', 20., 20./.05, value=.05)
 
-    ## by commenting out the next line, the MCMC will not try to fit the stoch
     vars += [s_r, s_m, s_d]
 
-    # TODO: consider choosing better priors
+    
     nd = Lognormal('nets distributed', mu=log(nd_min) * ones(10), tau=1.)
     nm = Lognormal('nets manufactured', mu=log(nm_min) * ones(10), tau=1.)
 
-    # TODO: consider choosing better priors
-    W_0 = Lognormal('initial warehouse net stock', mu=log(nd_min), tau=1., value=nd_min)
-    H_0 = Lognormal('initial household net stock', mu=log(nm_min), tau=1., value=nm_min)
+    W_0 = Lognormal('initial warehouse net stock', mu=log(1000), tau=10., value=1000)
+    H_0 = Lognormal('initial household net stock', mu=log(1000), tau=10., value=1000)
 
     @deterministic(name='warehouse net stock')
     def W(W_0=W_0, nm=nm, nd=nd):
@@ -115,6 +112,7 @@ for c in sorted(country_set):
 
     vars += [nd, nm, W_0, H_0, W, H]
 
+    
     # set initial condition on W_0 to have no stockouts
     if min(W.value) < 0:
         W_0.value = W_0.value - 2*min(W.value)
@@ -294,6 +292,10 @@ for c in sorted(country_set):
       ### plot the model fit
      ###
     ######################
+    fontsize = 12
+    small_fontsize = 10
+    tiny_fontsize = 7
+
     def plot_fit(f, scale=1.e6):
         """ Plot the posterior mean and 95% UI
         """
@@ -341,8 +343,8 @@ for c in sorted(country_set):
         l,r,b,t = axis()
         vlines(range(2000,2010), 0, t, color=(0,0,0), alpha=.3)
         axis([2000,2009,0,t])
-        ylabel('# of Nets (Millions)', fontsize=9)
-        xticks([2001, 2003, 2005, 2007], ['2001', '2003', '2005', '2007'], fontsize=9)
+        ylabel('# of Nets (Millions)', fontsize=small_fontsize)
+        xticks([2001, 2003, 2005, 2007], ['2001', '2003', '2005', '2007'], fontsize=fontsize)
 
     def my_hist(stoch):
         """ Plot a histogram of the posterior distribution of a stoch"""
@@ -352,6 +354,14 @@ for c in sorted(country_set):
                linewidth=2, alpha=.75, linestyle='dashed',
                color=['k', 'k', 'r', 'k', 'k'])
         yticks([])
+        a,l = xticks()
+        l = [int(x*100) for x in a]
+        l[0] = str(l[0]) + '%'
+        l[-1] = str(l[-1]) + '%'
+        xticks(floor(a*100.)/100., l, fontsize=fontsize)
+        title(str(stoch), fontsize=fontsize)
+        ylabel('probability density')
+        
 
     def my_acorr(stoch):
         """ Plot the autocorrelation of the a stoch trace"""
@@ -367,23 +377,21 @@ for c in sorted(country_set):
         acorr(vals, normed=True, maxlags=min(8, len(vals)))
         hlines([0],-8,8, linewidth=2, alpha=.7, linestyle='dotted')
         xticks([])
-        yticks([0,1], fontsize=6)
+        ylabel(str(stoch).replace('error in ', '').replace(' data',''),
+               fontsize=tiny_fontsize)
+        yticks([0,1], fontsize=tiny_fontsize)
+        title('mcmc autocorrelation', fontsize=small_fontsize)
 
 
     ### actual plotting code start here
     clf()
 
+    figtext(.055, .5, 'a' + ' '*10 + c + ' '*10 + 'a', rotation=270, fontsize=100,
+             bbox={'facecolor': 'black', 'alpha': 1},
+              color='white', verticalalignment='center', horizontalalignment='right')
     cols = 4
 
     for ii, stoch in enumerate([p_l, s_r, s_m, s_d, nm, nd, W, H]):
-        try:
-            if stoch in [p_l, s_r, s_m, s_d]:
-                subplot(4, cols, ii*cols + 3)
-                my_hist(stoch)
-                title(str(stoch), fontsize=8)
-        except Exception, e:
-            print 'Error: ', e
-
         subplot(8, cols*2, 2*cols - 1 + ii*2*cols)
         try:
             plot(stoch.trace(), linewidth=2, alpha=.5)
@@ -392,7 +400,9 @@ for c in sorted(country_set):
 
         xticks([])
         yticks([])
-        title(str(stoch), fontsize=6)
+        title('mcmc trace', fontsize=small_fontsize)
+        ylabel(str(stoch).replace('error in ', '').replace(' data',''),
+               fontsize=tiny_fontsize)
 
         subplot(8, cols*2, 2*cols + ii*2*cols)
         try:
@@ -400,9 +410,15 @@ for c in sorted(country_set):
         except Exception, e:
             print 'Error: ', e
 
-
+        try:
+            if stoch in [p_l, s_r, s_m, s_d]:
+                subplot(4, cols, ii*cols + 3)
+                my_hist(stoch)
+        except Exception, e:
+            print 'Error: ', e
+    
     subplot(4, cols/2, 1)
-    title('nets manufactured', fontsize=8)
+    title('nets manufactured', fontsize=fontsize)
     plot_fit(nm)
     if len(manufacturing_obs) > 0:
         try:
@@ -416,7 +432,7 @@ for c in sorted(country_set):
 
 
     subplot(4, cols/2, 2*(cols/2)+1)
-    title('nets distributed', fontsize=8)
+    title('nets distributed', fontsize=fontsize)
     plot_fit(nd)
     if len(admin_distribution_obs) > 0:
         label = 'Administrative Data'
@@ -445,13 +461,13 @@ for c in sorted(country_set):
 
 
     subplot(4, cols/2, (cols/2)+1)
-    title('nets in warehouse', fontsize=8)
+    title('nets in warehouse', fontsize=fontsize)
     plot_fit(W)
     decorate_figure()
 
 
     subplot(4, cols/2, 3*(cols/2)+1)
-    title('nets in households', fontsize=8)
+    title('nets in households', fontsize=fontsize)
     plot_fit(H)
     if len(household_stock_obs) > 0:
         scatter_data(household_stock_data, c, 'Name', 'Survey_Itns',
