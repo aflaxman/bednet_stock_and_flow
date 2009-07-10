@@ -299,8 +299,8 @@ for c in sorted(country_set):
         #mc.use_step_method(AdaptiveMetropolis, nm, verbose=0)
 
         try:
-            iter = 100
-            thin = 500
+            iter = 1000
+            thin = 2000
             burn = 20000
             mc.sample(iter*thin+burn, burn, thin)
         except:
