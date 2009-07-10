@@ -81,9 +81,9 @@ for c in sorted(country_set):
     vars += [logit_p_l, p_l]
 
     
-    s_r = Gamma('error in retention rate', 20., 20./.05, value=.05)
+    s_r = Gamma('error in retention data', 20., 20./.05, value=.05)
     s_m = Gamma('error in manufacturing data', 20., 20./.05, value=.05)
-    s_d = Gamma('error in administrative distribution data', 20., 20./.05, value=.05)
+    s_d = Gamma('error in admin dist data', 20., 20./.05, value=.05)
 
     vars += [s_r, s_m, s_d]
 
@@ -343,7 +343,7 @@ for c in sorted(country_set):
         l,r,b,t = axis()
         vlines(range(2000,2010), 0, t, color=(0,0,0), alpha=.3)
         axis([2000,2009,0,t])
-        ylabel('# of Nets (Millions)', fontsize=small_fontsize)
+        ylabel('# of Nets (Millions)', fontsize=fontsize)
         xticks([2001, 2003, 2005, 2007], ['2001', '2003', '2005', '2007'], fontsize=fontsize)
 
     def my_hist(stoch):
@@ -357,7 +357,6 @@ for c in sorted(country_set):
         a,l = xticks()
         l = [int(x*100) for x in a]
         l[0] = str(l[0]) + '%'
-        l[-1] = str(l[-1]) + '%'
         xticks(floor(a*100.)/100., l, fontsize=fontsize)
         title(str(stoch), fontsize=fontsize)
         ylabel('probability density')
@@ -377,7 +376,7 @@ for c in sorted(country_set):
         acorr(vals, normed=True, maxlags=min(8, len(vals)))
         hlines([0],-8,8, linewidth=2, alpha=.7, linestyle='dotted')
         xticks([])
-        ylabel(str(stoch).replace('error in ', '').replace(' data',''),
+        ylabel(str(stoch).replace('error in ', '').replace('data','err'),
                fontsize=tiny_fontsize)
         yticks([0,1], fontsize=tiny_fontsize)
         title('mcmc autocorrelation', fontsize=small_fontsize)
@@ -401,7 +400,7 @@ for c in sorted(country_set):
         xticks([])
         yticks([])
         title('mcmc trace', fontsize=small_fontsize)
-        ylabel(str(stoch).replace('error in ', '').replace(' data',''),
+        ylabel(str(stoch).replace('error in ', '').replace('data','err'),
                fontsize=tiny_fontsize)
 
         subplot(8, cols*2, 2*cols + ii*2*cols)
