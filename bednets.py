@@ -92,8 +92,8 @@ for c in sorted(country_set):
     vars += [s_r, s_m, s_d]
 
     
-    nd = Lognormal('nets distributed', mu=log(nd_min) * ones(year_end-year_start), tau=1.)
-    nm = Lognormal('nets manufactured', mu=log(nm_min) * ones(year_end-year_start), tau=1.)
+    nd = Lognormal('nets distributed', mu=log(nd_min) * ones(year_end-year_start-1), tau=1.)
+    nm = Lognormal('nets manufactured', mu=log(nm_min) * ones(year_end-year_start-1), tau=1.)
 
     W_0 = Lognormal('initial warehouse net stock', mu=log(1000), tau=10., value=1000)
     H_0 = Lognormal('initial household net stock', mu=log(1000), tau=10., value=1000)
@@ -303,9 +303,11 @@ for c in sorted(country_set):
     def plot_fit(f, scale=1.e6):
         """ Plot the posterior mean and 95% UI
         """
-        plot(range(year_start,year_end), f.stats()['mean']/scale, 'k-', linewidth=2, label='Est Mean')
+        plot(year_start + arange(len(f.value)),
+             f.stats()['mean']/scale, 'k-', linewidth=2, label='Est Mean')
 
-        x = np.concatenate((arange(year_start,year_end), arange(year_start,year_end)[::-1]))
+        x = np.concatenate((year_start + arange(len(f.value)),
+                            year_start + arange(len(f.value))[::-1]))
         y = np.concatenate((f.stats()['quantiles'][2.5]/scale,
                             f.stats()['quantiles'][97.5][::-1]/scale))
         fill(x, y, alpha=.95, label='Est 95% UI', facecolor='.8', alpha=.5)
