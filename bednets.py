@@ -385,7 +385,7 @@ for c in sorted(country_set):
         a,l = xticks()
         l = [int(x*100) for x in a]
         l[0] = str(l[0]) + '%'
-        xticks(floor(a*100.)/100., l, fontsize=fontsize)
+        xticks(floor(a*100.)/100., l, fontsize=small_fontsize)
         title(str(stoch), fontsize=small_fontsize)
         ylabel('probability density')
         
