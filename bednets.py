@@ -87,9 +87,10 @@ for c in sorted(country_set):
     
     s_r = Gamma('error in retention data', 20., 20./.05, value=.05)
     s_m = Gamma('error in manufacturing data', 20., 20./.05, value=.05)
-    s_d = Gamma('error in admin dist data', 20., 20./.05, value=.05)
+    s_d = Gamma('sampling error in admin dist data', 20., 20./.05, value=.05)
+    e_d = Normal('sys error in admin dist data', 0., 1./.05**2, value=0.)
 
-    vars += [s_r, s_m, s_d]
+    vars += [s_r, s_m, s_d, e_d]
 
     
     nd = Lognormal('nets distributed', mu=log(nd_min) * ones(year_end-year_start-1), tau=1.)
@@ -198,8 +199,9 @@ for c in sorted(country_set):
 
         @observed
         @stochastic(name='administrative_distribution_%s_%s' % (d['Country'], d['Year']))
-        def obs(value=float(d['Program_Itns']), year=int(d['Year']), nd=nd, s_d=s_d):
-            return normal_like(value / nd[year-year_start], 1., 1. / s_d**2)
+        def obs(value=float(d['Program_Itns']), year=int(d['Year']),
+                nd=nd, s_d=s_d, e_d=e_d):
+            return normal_like((1 - e_d) * value / nd[year-year_start], 1., 1. / s_d**2)
         admin_distribution_obs.append(obs)
 
         # also take this opportinuty to set better initial values for the MCMC
@@ -288,7 +290,7 @@ for c in sorted(country_set):
     if method == 'MCMC':
         map = MAP(vars)
         map.fit(method='fmin_powell', verbose=1)
-        for stoch in [s_m, s_d, s_r, p_l]:
+        for stoch in [s_r, s_m, s_d, e_d, p_l]:
             print '%s: %f' % (stoch, stoch.value)
 
         mc = MCMC(vars, verbose=1)
@@ -307,7 +309,7 @@ for c in sorted(country_set):
     elif method == 'NormApprox':
         na = NormApprox(vars)
         na.fit(method='fmin_powell', tol=.00001, verbose=1)
-        for stoch in [s_m, s_d, s_r, p_l]:
+        for stoch in [s_r, s_m, s_d, e_d, p_l]:
             print '%s: %f' % (stoch, stoch.value)
         na.sample(1000)
 
@@ -384,7 +386,7 @@ for c in sorted(country_set):
         l = [int(x*100) for x in a]
         l[0] = str(l[0]) + '%'
         xticks(floor(a*100.)/100., l, fontsize=fontsize)
-        title(str(stoch), fontsize=fontsize)
+        title(str(stoch), fontsize=small_fontsize)
         ylabel('probability density')
         
 
@@ -414,10 +416,15 @@ for c in sorted(country_set):
     figtext(.055, .5, 'a' + ' '*10 + c + ' '*10 + 'a', rotation=270, fontsize=100,
              bbox={'facecolor': 'black', 'alpha': 1},
               color='white', verticalalignment='center', horizontalalignment='right')
-    cols = 4
 
-    for ii, stoch in enumerate([p_l, s_r, s_m, s_d, nm, nd, W, H]):
-        subplot(8, cols*2, 2*cols - 1 + ii*2*cols)
+    stochs_to_plot = [p_l, s_r, s_m, s_d, e_d, nm, nd, W, H]
+    stochs_to_hist = [p_l, s_r, s_m, s_d, e_d]
+
+    cols = 4
+    rows = len(stochs_to_plot)
+
+    for ii, stoch in enumerate(stochs_to_plot):
+        subplot(rows, cols*2, 2*cols - 1 + ii*2*cols)
         try:
             plot(stoch.trace(), linewidth=2, alpha=.5)
         except Exception, e:
@@ -429,15 +436,15 @@ for c in sorted(country_set):
         ylabel(str(stoch).replace('error in ', '').replace('data','err'),
                fontsize=tiny_fontsize)
 
-        subplot(8, cols*2, 2*cols + ii*2*cols)
+        subplot(rows, cols*2, 2*cols + ii*2*cols)
         try:
             my_acorr(stoch)
         except Exception, e:
             print 'Error: ', e
 
         try:
-            if stoch in [p_l, s_r, s_m, s_d]:
-                subplot(4, cols, ii*cols + 3)
+            if stoch in stochs_to_hist:
+                subplot(len(stochs_to_hist), cols, ii*cols + 3)
                 my_hist(stoch)
         except Exception, e:
             print 'Error: ', e
