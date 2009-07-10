@@ -106,15 +106,35 @@ for c in sorted(country_set):
             W[t+1] = W[t] + nm[t] - nd[t]
         return W
 
-    @deterministic(name='household net stock')
-    def H(H_0=H_0, nd=nd, p_l=p_l):
-        H = zeros(year_end-year_start)
-        H[0] = H_0
+    @deterministic(name='1-year-old household net stock')
+    def H1(H_0=H_0, nd=nd):
+        H1 = zeros(year_end-year_start)
+        H1[0] = H_0
         for t in range(year_end - year_start - 1):
-            H[t+1] = H[t] * (1 - p_l) + nd[t]
-        return H
+            H1[t+1] = nd[t]
+        return H1
 
-    vars += [nd, nm, W_0, H_0, W, H]
+    @deterministic(name='2-year-old household net stock')
+    def H2(H1=H1, p_l=p_l):
+        H2 = zeros(year_end-year_start)
+        H2[0] = 0 # initial condition: no 2-year-old nets at beginning of start_year
+        for t in range(year_end - year_start - 1):
+            H2[t+1] = H1[t] * (1 - p_l)
+        return H2
+
+    @deterministic(name='3-year-old household net stock')
+    def H3(H2=H2, p_l=p_l):
+        H3 = zeros(year_end-year_start)
+        H3[0] = 0 # initial condition: no 3-year-old nets at beginning of start_year
+        for t in range(year_end - year_start - 1):
+            H3[t+1] = H2[t] * (1 - p_l)
+        return H3
+
+    @deterministic(name='household net stock')
+    def H(H1=H1, H2=H2, H3=H3):
+        return H1 + H2 + H3
+
+    vars += [nd, nm, W_0, H_0, W, H, H1, H2, H3]
 
     
     # set initial condition on W_0 to have no stockouts

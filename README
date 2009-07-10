@@ -11,18 +11,23 @@ Compartmental Model
 For a particular country, c:
 
 W[t] := number of nets in warehouses at time t
-H[t] := number of nets in households at time t
+H1[t] := number of 1-year-old nets in households at time t
+H2[t] := number of 2-year-old nets in households at time t
+H3[t] := number of 3-year-old nets in households at time t
 
 m[t] := number of nets manufactured during time period t
 d[t] := number of nets distributed during time period t
-l[t] := number of nets lost or discarded during time period t
+l1[t] := number of 1-year-old nets lost or discarded during time period t
+l2[t] := number of 2-year-old nets lost or discarded during time period t
 
 The compartments are connected as follows:
 
-  m  +---+  d  +---+  l
----->| W |---->| H |---->
-     +---+     +---+
-
+  m  +---+  d  +----+ 1-l1 +----+ 1-l2 +----+ 1
+---->| W |---->| H1 |----->| H2 |----->| H3 |--->
+     +---+     +----+      +----+      +----+
+                  |         |
+                  | l1      | l2
+                  +---->    +---->
 
 Model parameters
 ----------------
@@ -40,8 +45,11 @@ Model Dynamics
 --------------
 
 W[t+1] = W[t] + m[t] - d[t]
-H[t+1] = H[t] + d[t] - l[t]
-l[t] = H[t] * p_l
+H1[t+1] = d[t]
+H2[t+1] = H1[t] - l1[t]
+H3[t+1] = H2[t] - l2[t]
+l1[t] = H1[t] * p_l
+l2[t] = H2[t] * p_l
 
 
 Assumptions in Dynamics
@@ -49,11 +57,10 @@ Assumptions in Dynamics
 
 The model dynamics make two major assumptions:
 
-1. Every net resides in a warehouse for at least one time period
-   before being distributed to a household.
+1. Every 1-year-old and 2-year-old net is lost/discarded independently
+   at random with the same probability during the year.
 
-2. Every net is lost/discarded independently at random at every time
-   step with the same probability.
+2. Every 3-year-old net is discarded during the year.
 
 
 Statistical Model
