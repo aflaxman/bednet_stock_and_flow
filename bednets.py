@@ -148,11 +148,11 @@ for c in sorted(country_set):
 
     @potential
     def smooth_W(W=W):
-        return normal_like(diff(log(maximum(W,10000))), 0., 1. / (1.)**2)
+        return normal_like(diff(log(maximum(W,1))), 0., 1. / (1.)**2)
 
     @potential
     def smooth_H(H=H):
-        return normal_like(diff(log(maximum(H,10000))), 0., 1. / (1.)**2)
+        return normal_like(diff(log(maximum(H,1))), 0., 1. / (1.)**2)
 
     @potential
     def positive_stocks(H=H, W=W):
