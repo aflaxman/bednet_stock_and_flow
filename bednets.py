@@ -46,6 +46,10 @@ figure(figsize=(88, 68), dpi=75)
 country_set = set([d['Country'] for d in manufacturing_data])
 print 'fitting models for %d countries...' % len(country_set)
 
+### set years for estimation
+year_start = 1999
+year_end = 2010
+
 for c in sorted(country_set):
     ### find some descriptive statistics to use as priors
     nd_all = [float(d['Program_Itns']) for d in administrative_distribution_data \
@@ -88,15 +92,15 @@ for c in sorted(country_set):
     vars += [s_r, s_m, s_d]
 
     
-    nd = Lognormal('nets distributed', mu=log(nd_min) * ones(10), tau=1.)
-    nm = Lognormal('nets manufactured', mu=log(nm_min) * ones(10), tau=1.)
+    nd = Lognormal('nets distributed', mu=log(nd_min) * ones(year_end-year_start), tau=1.)
+    nm = Lognormal('nets manufactured', mu=log(nm_min) * ones(year_end-year_start), tau=1.)
 
     W_0 = Lognormal('initial warehouse net stock', mu=log(1000), tau=10., value=1000)
     H_0 = Lognormal('initial household net stock', mu=log(1000), tau=10., value=1000)
 
     @deterministic(name='warehouse net stock')
     def W(W_0=W_0, nm=nm, nd=nd):
-        W = zeros(10)
+        W = zeros(year_end-year_start)
         W[0] = W_0
         for t in range(9):
             W[t+1] = W[t] + nm[t] - nd[t]
@@ -104,7 +108,7 @@ for c in sorted(country_set):
 
     @deterministic(name='household net stock')
     def H(H_0=H_0, nd=nd, p_l=p_l):
-        H = zeros(10)
+        H = zeros(year_end-year_start)
         H[0] = H_0
         for t in range(9):
             H[t+1] = H[t] * (1 - p_l) + nd[t]
@@ -153,12 +157,12 @@ for c in sorted(country_set):
         @observed
         @stochastic(name='manufactured_%s_%s' % (d['Country'], d['Year']))
         def obs(value=float(d['Manu_Itns']), year=int(d['Year']), nm=nm, s_m=s_m):
-            return normal_like(value / nm[year-2000], 1., 1. / s_m**2)
+            return normal_like(value / nm[year - year_start], 1., 1. / s_m**2)
         manufacturing_obs.append(obs)
 
         # also take this opportinuty to set better initial values for the MCMC
         cur_val = copy.copy(nm.value)
-        cur_val[int(d['Year']) - 2000] = float(d['Manu_Itns'])
+        cur_val[int(d['Year']) - year_start] = float(d['Manu_Itns'])
         nm.value = cur_val
 
     vars += [manufacturing_obs]
@@ -175,12 +179,12 @@ for c in sorted(country_set):
         @observed
         @stochastic(name='administrative_distribution_%s_%s' % (d['Country'], d['Year']))
         def obs(value=float(d['Program_Itns']), year=int(d['Year']), nd=nd, s_d=s_d):
-            return normal_like(value / nd[year-2000], 1., 1. / s_d**2)
+            return normal_like(value / nd[year-year_start], 1., 1. / s_d**2)
         admin_distribution_obs.append(obs)
 
         # also take this opportinuty to set better initial values for the MCMC
         cur_val = copy.copy(nd.value)
-        cur_val[int(d['Year']) - 2000] = float(d['Program_Itns'])
+        cur_val[int(d['Year']) - year_start] = float(d['Program_Itns'])
         nd.value = cur_val
 
     vars += [admin_distribution_obs]
@@ -205,13 +209,13 @@ for c in sorted(country_set):
                 nd=nd, p_l=p_l):
             return normal_like(
                 value,
-                nd[estimate_year - 2000] * (1 - p_l) ** (survey_year - estimate_year),
+                nd[estimate_year - year_start] * (1 - p_l) ** (survey_year - estimate_year),
                 1./ (survey_err * (1 + (survey_year - estimate_year) * retention_err))**2)
         household_distribution_obs.append(obs)
 
         # also take this opportinuty to set better initial values for the MCMC
         cur_val = copy.copy(nd.value)
-        cur_val[estimate_year - 2000] = d2_i / (1 - p_l.value)**(survey_year - estimate_year)
+        cur_val[estimate_year - year_start] = d2_i / (1 - p_l.value)**(survey_year - estimate_year)
         nd.value = cur_val
 
     vars += [household_distribution_obs]
@@ -230,7 +234,7 @@ for c in sorted(country_set):
                 year=int(d['Year']),
                 std_err=float(d['Ste_Survey_Itns']),
                 H=H):
-            return normal_like(value, H[year-2000], 1. / std_err ** 2)
+            return normal_like(value, H[year-year_start], 1. / std_err ** 2)
         household_stock_obs.append(obs)
 
     vars += [household_stock_obs]
@@ -299,9 +303,9 @@ for c in sorted(country_set):
     def plot_fit(f, scale=1.e6):
         """ Plot the posterior mean and 95% UI
         """
-        plot(range(2000,2010), f.stats()['mean']/scale, 'k-', linewidth=2, label='Est Mean')
+        plot(range(year_start,year_end), f.stats()['mean']/scale, 'k-', linewidth=2, label='Est Mean')
 
-        x = np.concatenate((arange(2000,2010), arange(2000,2010)[::-1]))
+        x = np.concatenate((arange(year_start,year_end), arange(year_start,year_end)[::-1]))
         y = np.concatenate((f.stats()['quantiles'][2.5]/scale,
                             f.stats()['quantiles'][97.5][::-1]/scale))
         fill(x, y, alpha=.95, label='Est 95% UI', facecolor='.8', alpha=.5)
@@ -341,8 +345,8 @@ for c in sorted(country_set):
     def decorate_figure():
         """ Set the axis, etc."""
         l,r,b,t = axis()
-        vlines(range(2000,2010), 0, t, color=(0,0,0), alpha=.3)
-        axis([2000,2009,0,t])
+        vlines(range(year_start,year_end), 0, t, color=(0,0,0), alpha=.3)
+        axis([year_start, year_end-1, 0, t])
         ylabel('# of Nets (Millions)', fontsize=fontsize)
         xticks([2001, 2003, 2005, 2007], ['2001', '2003', '2005', '2007'], fontsize=fontsize)
 
