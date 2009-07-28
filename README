@@ -29,6 +29,11 @@ The compartments are connected as follows:
                   | l1      | l2
                   +---->    +---->
 
+A quantity of interest that can be calculated from this model is the
+expected time it takes a net to reach a household.  This is:
+
+E[T[t]] = (W[t+1] + d[t]/2) / d[t]
+
 Model parameters
 ----------------
 
@@ -36,7 +41,7 @@ p_l := the probability a net is lost during a time period
 d[t] := the number of nets distributed during time period t (t = 0, ..., 9)
 m[t] := the number of nets manufactured during time period t (t = 0, ..., 9)
 W[0] := the number of nets in warehouses at time 0
-H[0] := the number of nets in households at time 0
+H1[0] := the number of nets in households at time 0
 
 (The model for a single country has 23 parameters.)
 

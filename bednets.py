@@ -107,6 +107,10 @@ for c in sorted(country_set):
             W[t+1] = W[t] + nm[t] - nd[t]
         return W
 
+    @deterministic(name='distribution waiting time')
+    def T(W=W, nd=nd):
+        return (W[1:] + nd/2) / nd
+
     @deterministic(name='1-year-old household net stock')
     def H1(H_0=H_0, nd=nd):
         H1 = zeros(year_end-year_start)
@@ -135,7 +139,7 @@ for c in sorted(country_set):
     def H(H1=H1, H2=H2, H3=H3):
         return H1 + H2 + H3
 
-    vars += [nd, nm, W_0, H_0, W, H, H1, H2, H3]
+    vars += [nd, nm, W_0, H_0, W, T, H, H1, H2, H3]
 
     
     # set initial condition on W_0 to have no stockouts
@@ -290,8 +294,8 @@ for c in sorted(country_set):
     if method == 'MCMC':
         map = MAP(vars)
         map.fit(method='fmin_powell', verbose=1)
-        for stoch in [s_r, s_m, s_d, e_d, p_l]:
-            print '%s: %f' % (stoch, stoch.value)
+        for stoch in [s_r, s_m, s_d, e_d, p_l, T]:
+            print '%s: %s' % (str(stoch), str(stoch.value))
 
         mc = MCMC(vars, verbose=1)
         #mc.use_step_method(AdaptiveMetropolis, [nd, nm, W_0, H_0], verbose=0)
@@ -299,9 +303,9 @@ for c in sorted(country_set):
         #mc.use_step_method(AdaptiveMetropolis, nm, verbose=0)
 
         try:
-            iter = 1000
-            thin = 2000
-            burn = 20000
+            iter = 100
+            thin = 200
+            burn = 2000
             mc.sample(iter*thin+burn, burn, thin)
         except:
             pass
@@ -310,7 +314,7 @@ for c in sorted(country_set):
         na = NormApprox(vars)
         na.fit(method='fmin_powell', tol=.00001, verbose=1)
         for stoch in [s_r, s_m, s_d, e_d, p_l]:
-            print '%s: %f' % (stoch, stoch.value)
+            print '%s: %s' % (str(stoch), str(stoch.value))
         na.sample(1000)
 
 
@@ -366,12 +370,12 @@ for c in sorted(country_set):
                  error_val/scale, fmt=fmt, alpha=.95, label=label)
 
 
-    def decorate_figure():
+    def decorate_figure(ystr='# of Nets (Millions)'):
         """ Set the axis, etc."""
         l,r,b,t = axis()
         vlines(range(year_start,year_end), 0, t, color=(0,0,0), alpha=.3)
         axis([year_start, year_end-1, 0, t])
-        ylabel('# of Nets (Millions)', fontsize=fontsize)
+        ylabel(ystr, fontsize=fontsize)
         xticks([2001, 2003, 2005, 2007], ['2001', '2003', '2005', '2007'], fontsize=fontsize)
 
     def my_hist(stoch):
@@ -382,10 +386,12 @@ for c in sorted(country_set):
                linewidth=2, alpha=.75, linestyle='dashed',
                color=['k', 'k', 'r', 'k', 'k'])
         yticks([])
-        a,l = xticks()
-        l = [int(x*100) for x in a]
-        l[0] = str(l[0]) + '%'
-        xticks(floor(a*100.)/100., l, fontsize=small_fontsize)
+
+        if str(stoch).find('distribution waiting time') == -1:
+            a,l = xticks()
+            l = [int(x*100) for x in a]
+            l[0] = str(l[0]) + '%'
+            xticks(floor(a*100.)/100., l, fontsize=small_fontsize)
         title(str(stoch), fontsize=small_fontsize)
         ylabel('probability density')
         
@@ -417,7 +423,7 @@ for c in sorted(country_set):
              bbox={'facecolor': 'black', 'alpha': 1},
               color='white', verticalalignment='center', horizontalalignment='right')
 
-    stochs_to_plot = [p_l, s_r, s_m, s_d, e_d, nm, nd, W, H]
+    stochs_to_plot = [p_l, s_r, s_m, s_d, e_d, nm, nd, W, H, T]
     stochs_to_hist = [p_l, s_r, s_m, s_d, e_d]
 
     cols = 4
@@ -448,8 +454,9 @@ for c in sorted(country_set):
                 my_hist(stoch)
         except Exception, e:
             print 'Error: ', e
-    
-    subplot(4, cols/2, 1)
+
+    rows = 5
+    subplot(rows, cols/2, 0*(cols/2)+1)
     title('nets manufactured', fontsize=fontsize)
     plot_fit(nm)
     if len(manufacturing_obs) > 0:
@@ -462,8 +469,12 @@ for c in sorted(country_set):
                          error_val=1.96 * s_m.value)
     decorate_figure()
 
+    subplot(rows, cols/2, 1*(cols/2)+1)
+    title('nets in warehouse', fontsize=fontsize)
+    plot_fit(W)
+    decorate_figure()
 
-    subplot(4, cols/2, 2*(cols/2)+1)
+    subplot(rows, cols/2, 2*(cols/2)+1)
     title('nets distributed', fontsize=fontsize)
     plot_fit(nd)
     if len(admin_distribution_obs) > 0:
@@ -491,14 +502,14 @@ for c in sorted(country_set):
     legend(loc='upper left')
     decorate_figure()
 
+    subplot(rows, cols/2, 4*(cols/2)+1)
+    title(str(T), fontsize=fontsize)
+    plot_fit(T, scale=1.)
+    decorate_figure(ystr='Years')
+    l,r,b,t = axis()
+    axis([l, r, 0, 5])
 
-    subplot(4, cols/2, (cols/2)+1)
-    title('nets in warehouse', fontsize=fontsize)
-    plot_fit(W)
-    decorate_figure()
-
-
-    subplot(4, cols/2, 3*(cols/2)+1)
+    subplot(rows, cols/2, 3*(cols/2)+1)
     title('nets in households', fontsize=fontsize)
     plot_fit(H)
     if len(household_stock_obs) > 0:
