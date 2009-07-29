@@ -42,8 +42,8 @@ Model parameters
 p_l := the probability a net is lost during a time period
 d[t] := the number of nets distributed during time period t (t = 0, ..., 9)
 m[t] := the number of nets manufactured during time period t (t = 0, ..., 9)
-W[0] := the number of nets in warehouses at time 0
-H1[0] := the number of nets in households at time 0
+W_0 := the number of nets in warehouses at time 0
+H_0 := the number of nets in households at time 0
 
 (The model for a single country has 23 parameters.)
 
@@ -51,10 +51,10 @@ H1[0] := the number of nets in households at time 0
 Model Dynamics
 --------------
 
-W[t+1] = W[t] + m[t] - d[t]
-H1[t+1] = d[t]
-H2[t+1] = H1[t] - l1[t]
-H3[t+1] = H2[t] - l2[t]
+W[t+1] = W[t] + m[t] - d[t];  W[0] = W_0
+H1[t+1] = d[t];  H1[0] = H_0/3
+H2[t+1] = H1[t] - l1[t];  H2[0] = H_0/3
+H3[t+1] = H2[t] - l2[t];  H3[0] = H_0/3
 l1[t] = H1[t] * p_l
 l2[t] = H2[t] * p_l
 
@@ -97,8 +97,7 @@ obtained;  initial model for total number of nets::
 
 initial model for number of nets obtained during a particular year::
 
-    d2_i ~ d(t^e_i) * (1 - p_l)^{t^s_i - t^e_i} 
-             + N(0, (s_{d2_i} * (1 + (t^s_i - t^e_i) * s_r))^2)
+    d2_i ~ d(t^e_i) * (1 - p_l)^{t^s_i - t^e_i - .5} + N(0, s_{d2_i}^2)
         (here t^s_i is the year of the survey, and t^e_i is the year
         of the estimate)
 
@@ -119,7 +118,7 @@ p_l ~ logit^{-1}(Normal(logit(.05), tau=10))
 s_r ~ Gamma(20, 20/.05)
 s_m ~ Gamma(20, 20/.05)
 s_d ~ Gamma(20, 20/.05)
-e_d ~ Normal(0, .005^2)
+e_d ~ Normal(0, .01^2)
 
 d[t] ~ Lognormal(log(min_i(d_i)), 1)
 m[t] ~ Lognormal(log(min_i(m_i)), 1)

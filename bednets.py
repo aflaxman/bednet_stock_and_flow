@@ -80,7 +80,7 @@ for c in sorted(country_set):
     #######################
 
     logit_p_l = Normal('logit(Pr[net is lost])', mu=logit(.05), tau=10.)
-    p_l = InvLogit('Pr[net is lost]', logit_p_l, verbose=1)
+    p_l = InvLogit('Pr[net is lost]', logit_p_l)
 
     vars += [logit_p_l, p_l]
 
@@ -88,7 +88,7 @@ for c in sorted(country_set):
     s_r = Gamma('error in retention data', 20., 20./.05, value=.05)
     s_m = Gamma('error in manufacturing data', 20., 20./.05, value=.05)
     s_d = Gamma('sampling error in admin dist data', 20., 20./.05, value=.05)
-    e_d = Normal('sys error in admin dist data', 0., 1./.005**2, value=0.)
+    e_d = Normal('sys error in admin dist data', 0., 1./.01**2, value=0.)
 
     vars += [s_r, s_m, s_d, e_d]
 
@@ -117,23 +117,23 @@ for c in sorted(country_set):
     @deterministic(name='1-year-old household net stock')
     def H1(H_0=H_0, nd=nd):
         H1 = zeros(year_end-year_start)
-        H1[0] = H_0
+        H1[0] = H_0/3.
         for t in range(year_end - year_start - 1):
             H1[t+1] = nd[t]
         return H1
 
     @deterministic(name='2-year-old household net stock')
-    def H2(H1=H1, p_l=p_l):
+    def H2(H_0=H_0, H1=H1, p_l=p_l):
         H2 = zeros(year_end-year_start)
-        H2[0] = 0 # initial condition: no 2-year-old nets at beginning of start_year
+        H2[0] = H_0/3.
         for t in range(year_end - year_start - 1):
             H2[t+1] = H1[t] * (1 - p_l)
         return H2
 
     @deterministic(name='3-year-old household net stock')
-    def H3(H2=H2, p_l=p_l):
+    def H3(H_0=H_0, H2=H2, p_l=p_l):
         H3 = zeros(year_end-year_start)
-        H3[0] = 0 # initial condition: no 3-year-old nets at beginning of start_year
+        H3[0] = H_0/3.
         for t in range(year_end - year_start - 1):
             H3[t+1] = H2[t] * (1 - p_l)
         return H3
@@ -208,7 +208,7 @@ for c in sorted(country_set):
         @stochastic(name='administrative_distribution_%s_%s' % (d['Country'], d['Year']))
         def obs(value=float(d['Program_totalnets']), year=int(d['Year']),
                 nd=nd, s_d=s_d, e_d=e_d):
-            return normal_like(value / ((1 + e_d) * nd[year-year_start]), 1., 1. / s_d**2)
+            return normal_like(value / ((1 + e_d) * nd[year - year_start]), 1., 1. / s_d**2)
         admin_distribution_obs.append(obs)
 
         # also take this opportinuty to set better initial values for the MCMC
@@ -238,13 +238,13 @@ for c in sorted(country_set):
                 nd=nd, p_l=p_l):
             return normal_like(
                 value,
-                nd[estimate_year - year_start] * (1 - p_l) ** (survey_year - estimate_year),
-                1./ (survey_err * (1 + (survey_year - estimate_year) * retention_err))**2)
+                nd[estimate_year - year_start] * (1 - p_l) ** (survey_year - estimate_year - .5),
+                1./ survey_err**2)
         household_distribution_obs.append(obs)
 
         # also take this opportinuty to set better initial values for the MCMC
         cur_val = copy.copy(nd.value)
-        cur_val[estimate_year - year_start] = d2_i / (1 - p_l.value)**(survey_year - estimate_year)
+        cur_val[estimate_year - year_start] = d2_i / (1 - p_l.value)**(survey_year - estimate_year - .5)
         nd.value = cur_val
 
     vars += [household_distribution_obs]
@@ -301,14 +301,14 @@ for c in sorted(country_set):
             print '%s: %s' % (str(stoch), str(stoch.value))
 
         mc = MCMC(vars, verbose=1)
-        #mc.use_step_method(AdaptiveMetropolis, [nd, nm, W_0, H_0], verbose=0)
+        mc.use_step_method(AdaptiveMetropolis, [nd, nm], verbose=0)
         #mc.use_step_method(AdaptiveMetropolis, nd, verbose=0)
         #mc.use_step_method(AdaptiveMetropolis, nm, verbose=0)
 
         try:
-            iter = 1000
+            iter = 300
             thin = 200
-            burn = 2000
+            burn = 20000
             mc.sample(iter*thin+burn, burn, thin)
         except:
             pass
@@ -349,22 +349,25 @@ for c in sorted(country_set):
         data, with various types of error bars
         """
 
-        if p_l == None:
-            data_val = array([float(d[data_key]) for d in data_list if d[country_key] == c])
-        else:
-            # account for the nets lost prior to survey
-            data_val = array([
-                    float(d[data_key]) / (1-p_l)**(int(d['Survey_Year']) - int(d['Year']))
-                    for d in data_list if d[country_key] == c])
+        data_val = array([float(d[data_key]) for d in data_list if d[country_key] == c])
+        #if p_l == None:
+        #    data_val = array([float(d[data_key]) for d in data_list if d[country_key] == c])
+        #else:
+        #    # account for the nets lost prior to survey
+        #    data_val = array([
+        #            float(d[data_key]) / (1-p_l)**(int(d['Survey_Year']) - int(d['Year']) - .5)
+        #            for d in data_list if d[country_key] == c])
 
         if error_key:
-            if s_r == None:
-                error_val = array([1.96*float(d[error_key]) \
-                                       for d in data_list if d[country_key] == c])
-            else:
-                error_val = array([1.96*float(d[error_key])
-                                   * (1 + (int(d['Survey_Year']) - int(d['Year'])) * s_r) \
-                                       for d in data_list if d[country_key] == c])
+            error_val = array([1.96*float(d[error_key]) \
+                                   for d in data_list if d[country_key] == c])
+            #if s_r == None:
+            #    error_val = array([1.96*float(d[error_key]) \
+            #                           for d in data_list if d[country_key] == c])
+            #else:
+            #    error_val = array([1.96*float(d[error_key])
+            #                       * (1 + (int(d['Survey_Year']) - int(d['Year'])) * s_r) \
+            #                           for d in data_list if d[country_key] == c])
 
         elif error_val:
             error_val = 1.96 * error_val * data_val
@@ -426,8 +429,8 @@ for c in sorted(country_set):
              bbox={'facecolor': 'black', 'alpha': 1},
               color='white', verticalalignment='center', horizontalalignment='right')
 
-    stochs_to_plot = [p_l, s_r, s_m, s_d, e_d, nm, nd, W, H, T]
-    stochs_to_hist = [p_l, s_r, s_m, s_d, e_d]
+    stochs_to_plot = [s_m, s_d, e_d, p_l, s_r, nm, nd, W, H, T]
+    stochs_to_hist = [s_m, s_d, e_d, p_l, s_r]
 
     cols = 4
     rows = len(stochs_to_plot)
