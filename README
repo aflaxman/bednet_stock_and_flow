@@ -30,9 +30,11 @@ The compartments are connected as follows:
                   +---->    +---->
 
 A quantity of interest that can be calculated from this model is the
-expected time it takes a net to reach a household.  This is:
+expected time it takes a net to reach a household.  Assuming the nets
+are distributed with a first-in-first-out system, this is:
 
-E[T[t]] = (W[t+1] + d[t]/2) / d[t]
+T[t] = \sum_{x > 0} (m[t] - (d[t] + ... + d[t+x] - W[t])^+)^+ / m[t]
+
 
 Model parameters
 ----------------
@@ -76,21 +78,21 @@ There are 5 types of data that will drive parameter estimation:
 Manufacturing Data - Information on the number of nets procured by
 each country for distribution;  initial model::
 
-    m_i ~ m(t_i) * (1 + N(0, s_m^2))
+    m_i ~ m[t_i] * (1 + N(0, s_m^2))
 
 
 Administrative Distribution Data - Information on the number of nets
 distributed through the public sector supply chain in each country;
 initial model::
 
-    d1_i ~ d(t_i) * (1 + N(0, s_d^2))
+    d1_i ~ (1 - e_d) * d[t_i] * (1 + N(0, s_d^2))
 
 
 Household Survey Data - Information from DHS, MICS, and MIS where
 head-of-household reports number of nets and time when each net was
 obtained;  initial model for total number of nets::
 
-    N_i ~ H(t_i) + N(0, s_{N_i}^2)
+    N_i ~ H[t_i] + N(0, s_{N_i}^2)
         (here t_i is the year of the survey used to compute N_i)
 
 initial model for number of nets obtained during a particular year::
@@ -117,6 +119,7 @@ p_l ~ logit^{-1}(Normal(logit(.05), tau=10))
 s_r ~ Gamma(20, 20/.05)
 s_m ~ Gamma(20, 20/.05)
 s_d ~ Gamma(20, 20/.05)
+e_d ~ Normal(0, .05^2)
 
 d[t] ~ Lognormal(log(min_i(d_i)), 1)
 m[t] ~ Lognormal(log(min_i(m_i)), 1)

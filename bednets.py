@@ -34,7 +34,7 @@ def load_csv(fname):
 
 ### load all data from csv files
 manufacturing_data = load_csv('manuitns_forabie07072009.csv')
-administrative_distribution_data = load_csv('programitns_forabie07072009.csv')
+administrative_distribution_data = load_csv('total_admtotal_forabie28072009.csv')
 household_stock_data = load_csv('stock_surveyitns_forabie07072009.csv')
 household_distribution_data = load_csv('surveyitns_forabie7072009.csv')
 retention_data = load_csv('retention07072009.csv')
@@ -52,7 +52,7 @@ year_end = 2010
 
 for c in sorted(country_set):
     ### find some descriptive statistics to use as priors
-    nd_all = [float(d['Program_Itns']) for d in administrative_distribution_data \
+    nd_all = [float(d['Program_totalnets']) for d in administrative_distribution_data \
                   if d['Country'] == c] \
                   + [float(d['Survey_Itns']) for d in household_distribution_data \
                          if d['Name'] == c and d['Year'] == d['Survey_Year']]
@@ -108,8 +108,12 @@ for c in sorted(country_set):
         return W
 
     @deterministic(name='distribution waiting time')
-    def T(W=W, nd=nd):
-        return (W[1:] + nd/2) / nd
+    def T(W=W, nd=nd, nm=nm):
+        T = zeros(year_end - year_start - 1)
+        for t in range(year_end - year_start - 1):
+            T[t] = sum(maximum(0, nm[t] - maximum(0, cumsum(nd[t:]) - W[t]))[1:]) / nm[t]
+
+        return T
 
     @deterministic(name='1-year-old household net stock')
     def H1(H_0=H_0, nd=nd):
@@ -203,14 +207,14 @@ for c in sorted(country_set):
 
         @observed
         @stochastic(name='administrative_distribution_%s_%s' % (d['Country'], d['Year']))
-        def obs(value=float(d['Program_Itns']), year=int(d['Year']),
+        def obs(value=float(d['Program_totalnets']), year=int(d['Year']),
                 nd=nd, s_d=s_d, e_d=e_d):
-            return normal_like((1 - e_d) * value / nd[year-year_start], 1., 1. / s_d**2)
+            return normal_like(value / ((1 - e_d) * nd[year-year_start]), 1., 1. / s_d**2)
         admin_distribution_obs.append(obs)
 
         # also take this opportinuty to set better initial values for the MCMC
         cur_val = copy.copy(nd.value)
-        cur_val[int(d['Year']) - year_start] = float(d['Program_Itns'])
+        cur_val[int(d['Year']) - year_start] = float(d['Program_totalnets'])
         nd.value = cur_val
 
     vars += [admin_distribution_obs]
@@ -480,11 +484,11 @@ for c in sorted(country_set):
     if len(admin_distribution_obs) > 0:
         label = 'Administrative Data'
         try:
-            scatter_data(administrative_distribution_data, c, 'Country', 'Program_Itns',
+            scatter_data(administrative_distribution_data, c, 'Country', 'Program_totalnets',
                          error_val=1.96 * s_d.stats()['mean'], label=label)
         except Exception, e:
             print 'Error: ', e
-            scatter_data(administrative_distribution_data, c, 'Country', 'Program_Itns',
+            scatter_data(administrative_distribution_data, c, 'Country', 'Program_totalnets',
                          error_val=1.96 * s_m.value, label=label)
     if len(household_distribution_obs) > 0:
         label = 'Survey Data'
