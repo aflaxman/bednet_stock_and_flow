@@ -88,7 +88,7 @@ for c in sorted(country_set):
     s_r = Gamma('error in retention data', 20., 20./.05, value=.05)
     s_m = Gamma('error in manufacturing data', 20., 20./.05, value=.05)
     s_d = Gamma('sampling error in admin dist data', 20., 20./.05, value=.05)
-    e_d = Normal('sys error in admin dist data', 0., 1./.05**2, value=0.)
+    e_d = Normal('sys error in admin dist data', 0., 1./.005**2, value=0.)
 
     vars += [s_r, s_m, s_d, e_d]
 
@@ -109,10 +109,9 @@ for c in sorted(country_set):
 
     @deterministic(name='distribution waiting time')
     def T(W=W, nd=nd, nm=nm):
-        T = zeros(year_end - year_start - 1)
-        for t in range(year_end - year_start - 1):
+        T = zeros(year_end - year_start - 3)
+        for t in range(year_end - year_start - 3):
             T[t] = sum(maximum(0, nm[t] - maximum(0, cumsum(nd[t:]) - W[t]))[1:]) / nm[t]
-
         return T
 
     @deterministic(name='1-year-old household net stock')
@@ -209,7 +208,7 @@ for c in sorted(country_set):
         @stochastic(name='administrative_distribution_%s_%s' % (d['Country'], d['Year']))
         def obs(value=float(d['Program_totalnets']), year=int(d['Year']),
                 nd=nd, s_d=s_d, e_d=e_d):
-            return normal_like(value / ((1 - e_d) * nd[year-year_start]), 1., 1. / s_d**2)
+            return normal_like(value / ((1 + e_d) * nd[year-year_start]), 1., 1. / s_d**2)
         admin_distribution_obs.append(obs)
 
         # also take this opportinuty to set better initial values for the MCMC
@@ -307,7 +306,7 @@ for c in sorted(country_set):
         #mc.use_step_method(AdaptiveMetropolis, nm, verbose=0)
 
         try:
-            iter = 100
+            iter = 1000
             thin = 200
             burn = 2000
             mc.sample(iter*thin+burn, burn, thin)
@@ -510,8 +509,8 @@ for c in sorted(country_set):
     title(str(T), fontsize=fontsize)
     plot_fit(T, scale=1.)
     decorate_figure(ystr='Years')
-    l,r,b,t = axis()
-    axis([l, r, 0, 5])
+    #l,r,b,t = axis()
+    #axis([l, r, 0, 5])
 
     subplot(rows, cols/2, 3*(cols/2)+1)
     title('nets in households', fontsize=fontsize)

@@ -85,7 +85,7 @@ Administrative Distribution Data - Information on the number of nets
 distributed through the public sector supply chain in each country;
 initial model::
 
-    d1_i ~ (1 - e_d) * d[t_i] * (1 + N(0, s_d^2))
+    d1_i ~ (1 + e_d) * d[t_i] * (1 + N(0, s_d^2))
 
 
 Household Survey Data - Information from DHS, MICS, and MIS where
@@ -119,7 +119,7 @@ p_l ~ logit^{-1}(Normal(logit(.05), tau=10))
 s_r ~ Gamma(20, 20/.05)
 s_m ~ Gamma(20, 20/.05)
 s_d ~ Gamma(20, 20/.05)
-e_d ~ Normal(0, .05^2)
+e_d ~ Normal(0, .005^2)
 
 d[t] ~ Lognormal(log(min_i(d_i)), 1)
 m[t] ~ Lognormal(log(min_i(m_i)), 1)
