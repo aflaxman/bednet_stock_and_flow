@@ -395,7 +395,7 @@ for c in sorted(country_set):
 
         if str(stoch).find('distribution waiting time') == -1:
             a,l = xticks()
-            l = [int(x*100) for x in a]
+            l = [int(floor(a*100.)/100.) for x in a]
             l[0] = str(l[0]) + '%'
             xticks(floor(a*100.)/100., l, fontsize=small_fontsize)
         title(str(stoch), fontsize=small_fontsize)
