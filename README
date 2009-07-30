@@ -114,8 +114,8 @@ distributed::
 Priors
 ------
 
-p_l ~ logit^{-1}(Normal(logit(.05), tau=10))
-s_r ~ Gamma(20, 20/.05)
+logit(p_l) ~ Normal(logit(.05), tau=1)
+s_r ~ Gamma(20, 20/.15)
 s_m ~ Gamma(20, 20/.05)
 s_d ~ Gamma(20, 20/.05)
 e_d ~ Normal(0, .01^2)

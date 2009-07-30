@@ -79,13 +79,13 @@ for c in sorted(country_set):
      ###
     #######################
 
-    logit_p_l = Normal('logit(Pr[net is lost])', mu=logit(.05), tau=10.)
+    logit_p_l = Normal('logit(Pr[net is lost])', mu=logit(.05), tau=1.)
     p_l = InvLogit('Pr[net is lost]', logit_p_l)
 
     vars += [logit_p_l, p_l]
 
     
-    s_r = Gamma('error in retention data', 20., 20./.05, value=.05)
+    s_r = Gamma('error in retention data', 20., 20./.15, value=.15)
     s_m = Gamma('error in manufacturing data', 20., 20./.05, value=.05)
     s_d = Gamma('sampling error in admin dist data', 20., 20./.05, value=.05)
     e_d = Normal('sys error in admin dist data', 0., 1./.01**2, value=0.)
@@ -301,7 +301,7 @@ for c in sorted(country_set):
             print '%s: %s' % (str(stoch), str(stoch.value))
 
         mc = MCMC(vars, verbose=1)
-        mc.use_step_method(AdaptiveMetropolis, [nd, nm], verbose=0)
+        mc.use_step_method(AdaptiveMetropolis, [nd, nm, p_l, s_r], verbose=0)
         #mc.use_step_method(AdaptiveMetropolis, nd, verbose=0)
         #mc.use_step_method(AdaptiveMetropolis, nm, verbose=0)
 
