@@ -129,6 +129,8 @@ H_0 ~ Lognormal(log(1000), 10)
 log(W[t+1]/W[t]) ~ Normal(0, 1^2)
 log(H[t+1]/H[t]) ~ Normal(0, 1^2)
 
+T[t] ~ Normal(1, 1^2)
+
 W[t], H[t] >= 0
 
 

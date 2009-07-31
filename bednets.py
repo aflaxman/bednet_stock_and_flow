@@ -163,10 +163,14 @@ for c in sorted(country_set):
         return normal_like(diff(log(maximum(H,1))), 0., 1. / (1.)**2)
 
     @potential
+    def T_near_1(T=T):
+        return normal_like(T, ones(shape(T)), 1. / (1.)**2)
+
+    @potential
     def positive_stocks(H=H, W=W):
         return -1000 * (dot(H**2, H < 0) + dot(W**2, W < 0))
 
-    vars += [smooth_H, smooth_W, positive_stocks]
+    vars += [smooth_H, smooth_W, positive_stocks, T_near_1]
 
 
        #####################
