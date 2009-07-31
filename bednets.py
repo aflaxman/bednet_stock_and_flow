@@ -50,6 +50,36 @@ print 'fitting models for %d countries...' % len(country_set)
 year_start = 1999
 year_end = 2010
 
+all_vars = {}
+
+c = 'Global'
+
+global_logit_p_l = Normal('logit(Pr[net is lost])_%s'%c, mu=logit(.05), tau=1.)
+global_p_l = InvLogit('Pr[net is lost]_%s'%c, global_logit_p_l)
+
+global_s_r = Gamma('error in retention data_%s'%c, 20., 20./.15, value=.15)
+global_s_m = Gamma('error in manufacturing data_%s'%c, 20., 20./.05, value=.05)
+global_s_d = Gamma('sampling error in admin dist data_%s'%c, 20., 20./.05, value=.05)
+global_e_d = Normal('sys error in admin dist data_%s'%c, 0., 1./.01**2, value=0.)
+
+all_vars[c] = [global_logit_p_l, global_p_l, global_s_r, global_s_m, global_s_d, global_e_d]
+
+
+### observed net retention 
+
+retention_obs = []
+for d in retention_data:
+    @observed
+    @stochastic(name='retention_%s_%s' % (d['Name'], d['Year']))
+    def obs(value=float(d['Retention_Rate']),
+            T_i=float(d['Follow_up_Time']),
+            p_l=global_p_l, s_r=global_s_r):
+        return normal_like(value, (1. - p_l) ** T_i, 1. / s_r**2)
+    retention_obs.append(obs)
+
+all_vars[c] += retention_obs
+
+
 for c in sorted(country_set):
     ### find some descriptive statistics to use as priors
     nd_all = [float(d['Program_totalnets']) for d in administrative_distribution_data \
@@ -79,27 +109,27 @@ for c in sorted(country_set):
      ###
     #######################
 
-    logit_p_l = Normal('logit(Pr[net is lost])', mu=logit(.05), tau=1.)
-    p_l = InvLogit('Pr[net is lost]', logit_p_l)
+    logit_p_l = Normal('logit(Pr[net is lost])_%s'%c, mu=global_logit_p_l, tau=1.)
+    p_l = InvLogit('Pr[net is lost]_%s'%c, logit_p_l)
 
     vars += [logit_p_l, p_l]
 
     
-    s_r = Gamma('error in retention data', 20., 20./.15, value=.15)
-    s_m = Gamma('error in manufacturing data', 20., 20./.05, value=.05)
-    s_d = Gamma('sampling error in admin dist data', 20., 20./.05, value=.05)
-    e_d = Normal('sys error in admin dist data', 0., 1./.01**2, value=0.)
+    s_r = Normal('error in retention data_%s'%c, global_s_r, 1., value=.15)
+    s_m = Normal('error in manufacturing data_%s'%c, global_s_m, 1, value=.05)
+    s_d = Normal('sampling error in admin dist data_%s'%c, global_s_d, 1, value=.05)
+    e_d = Normal('sys error in admin dist data_%s'%c, global_e_d, 1, value=0.)
 
     vars += [s_r, s_m, s_d, e_d]
 
     
-    nd = Lognormal('nets distributed', mu=log(nd_min) * ones(year_end-year_start-1), tau=1.)
-    nm = Lognormal('nets manufactured', mu=log(nm_min) * ones(year_end-year_start-1), tau=1.)
+    nd = Lognormal('nets distributed_%s'%c, mu=log(nd_min) * ones(year_end-year_start-1), tau=1.)
+    nm = Lognormal('nets manufactured_%s'%c, mu=log(nm_min) * ones(year_end-year_start-1), tau=1.)
 
-    W_0 = Lognormal('initial warehouse net stock', mu=log(1000), tau=10., value=1000)
-    H_0 = Lognormal('initial household net stock', mu=log(1000), tau=10., value=1000)
+    W_0 = Lognormal('initial warehouse net stock_%s'%c, mu=log(1000), tau=10., value=1000)
+    H_0 = Lognormal('initial household net stock_%s'%c, mu=log(1000), tau=10., value=1000)
 
-    @deterministic(name='warehouse net stock')
+    @deterministic(name='warehouse net stock_%s'%c)
     def W(W_0=W_0, nm=nm, nd=nd):
         W = zeros(year_end-year_start)
         W[0] = W_0
@@ -107,14 +137,14 @@ for c in sorted(country_set):
             W[t+1] = W[t] + nm[t] - nd[t]
         return W
 
-    @deterministic(name='distribution waiting time')
+    @deterministic(name='distribution waiting time_%s'%c)
     def T(W=W, nd=nd, nm=nm):
         T = zeros(year_end - year_start - 3)
         for t in range(year_end - year_start - 3):
             T[t] = sum(maximum(0, nm[t] - maximum(0, cumsum(nd[t:]) - W[t]))[1:]) / nm[t]
         return T
 
-    @deterministic(name='1-year-old household net stock')
+    @deterministic(name='1-year-old household net stock_%s'%c)
     def H1(H_0=H_0, nd=nd):
         H1 = zeros(year_end-year_start)
         H1[0] = H_0/3.
@@ -122,7 +152,7 @@ for c in sorted(country_set):
             H1[t+1] = nd[t]
         return H1
 
-    @deterministic(name='2-year-old household net stock')
+    @deterministic(name='2-year-old household net stock_%s'%c)
     def H2(H_0=H_0, H1=H1, p_l=p_l):
         H2 = zeros(year_end-year_start)
         H2[0] = H_0/3.
@@ -130,7 +160,7 @@ for c in sorted(country_set):
             H2[t+1] = H1[t] * (1 - p_l)
         return H2
 
-    @deterministic(name='3-year-old household net stock')
+    @deterministic(name='3-year-old household net stock_%s'%c)
     def H3(H_0=H_0, H2=H2, p_l=p_l):
         H3 = zeros(year_end-year_start)
         H3[0] = H_0/3.
@@ -138,7 +168,7 @@ for c in sorted(country_set):
             H3[t+1] = H2[t] * (1 - p_l)
         return H3
 
-    @deterministic(name='household net stock')
+    @deterministic(name='household net stock_%s'%c)
     def H(H1=H1, H2=H2, H3=H3):
         return H1 + H2 + H3
 
@@ -272,63 +302,53 @@ for c in sorted(country_set):
 
     vars += [household_stock_obs]
 
-
-    ### observed net retention 
-
-    retention_obs = []
-    for d in retention_data:
-        @observed
-        @stochastic(name='retention_%s_%s' % (d['Name'], d['Year']))
-        def obs(value=float(d['Retention_Rate']),
-                T_i=float(d['Follow_up_Time']),
-                p_l=p_l, s_r=s_r):
-            return normal_like(value, (1. - p_l) ** T_i, 1. / s_r**2)
-        retention_obs.append(obs)
-
-    vars += [retention_obs]
+    all_vars[c] = vars
 
 
 
-       #################
-      ### fit the model
-     ###
-    #################
-    print 'running fit for net model in %s...' % c
 
-    method = 'MCMC'
-    #method = 'NormApprox'
+   #################
+  ### fit the model
+ ###
+#################
+print 'running fit for net model in %s...' % c
 
-    if method == 'MCMC':
-        map = MAP(vars)
-        map.fit(method='fmin_powell', verbose=1)
-        for stoch in [s_r, s_m, s_d, e_d, p_l, T]:
-            print '%s: %s' % (str(stoch), str(stoch.value))
+method = 'MCMC'
+#method = 'NormApprox'
 
-        mc = MCMC(vars, verbose=1)
-        mc.use_step_method(AdaptiveMetropolis, [nd, nm, p_l, s_r], verbose=0)
-        #mc.use_step_method(AdaptiveMetropolis, nd, verbose=0)
-        #mc.use_step_method(AdaptiveMetropolis, nm, verbose=0)
+if method == 'MCMC':
+    map = MAP(all_vars)
+    map.fit(method='fmin_powell', verbose=1)
+    for stoch in [s_r, s_m, s_d, e_d, p_l, T]:
+        print '%s: %s' % (str(stoch), str(stoch.value))
 
-        try:
-            iter = 300
-            thin = 200
-            burn = 20000
-            mc.sample(iter*thin+burn, burn, thin)
-        except:
-            pass
+    mc = MCMC(all_vars, verbose=1)
+    mc.use_step_method(AdaptiveMetropolis, [nd, nm, p_l, s_r], verbose=0)
+    #mc.use_step_method(AdaptiveMetropolis, nd, verbose=0)
+    #mc.use_step_method(AdaptiveMetropolis, nm, verbose=0)
 
-    elif method == 'NormApprox':
-        na = NormApprox(vars)
-        na.fit(method='fmin_powell', tol=.00001, verbose=1)
-        for stoch in [s_r, s_m, s_d, e_d, p_l]:
-            print '%s: %s' % (str(stoch), str(stoch.value))
-        na.sample(1000)
+    try:
+        iter = 300
+        thin = 200
+        burn = 20000
+        mc.sample(iter*thin+burn, burn, thin)
+    except:
+        pass
+
+elif method == 'NormApprox':
+    na = NormApprox(all_vars)
+    na.fit(method='fmin_powell', tol=.00001, verbose=1)
+    for stoch in [s_r, s_m, s_d, e_d, p_l]:
+        print '%s: %s' % (str(stoch), str(stoch.value))
+    na.sample(1000)
 
 
        ######################
       ### plot the model fit
      ###
     ######################
+for c in sorted(country_set):
+    vars = all_vars[c]
     fontsize = 12
     small_fontsize = 10
     tiny_fontsize = 7
@@ -527,4 +547,5 @@ for c in sorted(country_set):
                      error_key='Ste_Survey_Itns', fmt='bs')
     decorate_figure()
 
-    savefig('bednets_%s.png' % c)
+    import time
+    savefig('bednets_%s_%s.png' % (c, time.strftime('%Y_%m_%d_%H_%m')))
