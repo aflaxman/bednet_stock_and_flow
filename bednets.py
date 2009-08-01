@@ -5,6 +5,7 @@ from pylab import *
 from pymc import *
 
 import copy
+import time
 
 def load_csv(fname):
     """ Quick function to load each row of a csv file as a dict
@@ -39,8 +40,117 @@ household_stock_data = load_csv('stock_surveyitns_forabie07072009.csv')
 household_distribution_data = load_csv('surveyitns_forabie7072009.csv')
 retention_data = load_csv('retention07072009.csv')
 
+
+### find parameters for simple model to predict administrative
+### distribution data from household distribution data
+data_dict = {}
+for d in administrative_distribution_data:
+    key = (d['Country'], d['Year'])
+    if not data_dict.has_key(key):
+        data_dict[key] = {}
+    data_dict[key]['admin'] = float(d['Program_totalnets'])
+for d in household_distribution_data:
+    key = (d['Name'], d['Year'])
+    if not data_dict.has_key(key):
+        data_dict[key] = {}
+    data_dict[key]['survey'] = float(d['Survey_Itns'])
+    data_dict[key]['time'] =  float(d['Survey_Year'])-float(d['Year'])
+    data_dict[key]['survey_ste'] = float(d['Ste_Survey_Itns'])
+for key in data_dict.keys():
+    if len(data_dict[key]) != 4:
+        data_dict.pop(key)
+
+x = array([data_dict[k]['admin'] for k in sorted(data_dict.keys())])
+y = array([data_dict[k]['survey'] for k in sorted(data_dict.keys())])
+y_e = array([data_dict[k]['survey_ste'] for k in sorted(data_dict.keys())])
+
+
+prior_s_d = Gamma('prior on sampling error in admin dist data', 200., 200./.05, value=.05)
+prior_e_d = Normal('prior on sys error in admin dist data', 0., 1./.05**2, value=0.)
+prior_vars = [prior_s_d, prior_e_d]
+
+for k in data_dict:
+    @observed
+    @stochastic
+    def net_distribution_data(value=data_dict[k]['admin'], survey_value=data_dict[k]['survey'],
+                          s_d=prior_s_d, e_d=prior_e_d):
+        return normal_like(value / ((1 + e_d) * survey_value), 1., 1. / s_d**2)
+    prior_vars.append(net_distribution_data)
+
+mc = MCMC(prior_vars, verbose=1)
+mc.use_step_method(AdaptiveMetropolis, [prior_s_d, prior_e_d])
+iter = 1000
+thin = 50
+burn = 20000
+try:
+    mc.sample(iter*thin+burn, burn, thin)
+except:
+    pass
+
+print str(prior_s_d), prior_s_d.stats()
+print str(prior_e_d), prior_e_d.stats()
+
+mean_e_d = prior_e_d.stats()['mean']
+
+y_predicted = exp(arange(log(1000), 16, .1))
+x_predicted = (1 + mean_e_d) * y_predicted
+x_predicted = maximum(10, x_predicted)
+
 ### setup the canvas for our plots
 figure(figsize=(88, 68), dpi=75)
+
+clf()
+subplot(1,2,1)
+errorbar(x, y, 1.96*y_e, fmt=',', alpha=.9, linewidth=1.5)
+plot(x_predicted, y_predicted, 'r:', alpha=.75, linewidth=2, label='predicted value')
+loglog([1000,exp(16)],[1000,exp(16)], 'k--', alpha=.5, linewidth=2, label='y=x')
+
+y = np.concatenate((y_predicted, y_predicted[::-1]))
+x = np.concatenate(((1 + mean_e_d - 1.96*prior_e_d.stats()['standard deviation']) * y_predicted,
+                   ((1 + mean_e_d + 1.96*prior_e_d.stats()['standard deviation']) * y_predicted)[::-1]))
+x = maximum(10, x)
+fill(x, y, alpha=.95, label='Sys Err 95% UI', facecolor=(.8,.4,.4), alpha=.5)
+
+x = np.concatenate(((1 + mean_e_d - 1.96*prior_e_d.stats()['standard deviation']) * y_predicted * (1 - 1.96*prior_s_d.stats()['mean']),
+                   ((1 + mean_e_d + 1.96*prior_e_d.stats()['standard deviation']) * y_predicted * (1 + 1.96*prior_s_d.stats()['mean']))[::-1]))
+x = maximum(10, x)
+fill(x, y, alpha=.95, label='Total Err 95% UI', facecolor='.8', alpha=.5)
+
+axis([1000,exp(16),1000,exp(16)])
+legend()
+ylabel('Nets distributed according to household survey')
+xlabel('Nets distributed according to administrative data')
+for k in data_dict:
+    d = data_dict[k]
+    text(d['admin'], d['survey'], ' %s, %s' % k, fontsize=8, alpha=.7, verticalalignment='center')
+
+subplot(2,4,3)
+hist(prior_e_d.trace(), normed=True, log=False)
+l,r,b,t = axis()
+vlines(ravel(prior_e_d.stats()['quantiles'].values()), b, t,
+       linewidth=2, alpha=.75, linestyle='dashed',
+       color=['k', 'k', 'r', 'k', 'k'])
+yticks([])
+title(str(prior_e_d), fontsize=8)
+
+subplot(2,4,4)
+hist(prior_s_d.trace(), normed=True, log=False)
+l,r,b,t = axis()
+vlines(ravel(prior_s_d.stats()['quantiles'].values()), b, t,
+       linewidth=2, alpha=.75, linestyle='dashed',
+       color=['k', 'k', 'r', 'k', 'k'])
+yticks([])
+title(str(prior_s_d), fontsize=8)
+
+subplot(2,4,7)
+acorr(prior_e_d.trace() - mean(prior_e_d.trace()), maxlags=10, normed=True)
+acorr(prior_s_d.trace() - mean(prior_s_d.trace()), maxlags=10, normed=True)
+
+subplot(2,4,8)
+plot(prior_e_d.trace())
+plot(prior_s_d.trace())
+
+savefig('bednets_Priors_%s.png' % time.strftime('%Y_%m_%d_%H_%M'))
 
 ### pick the country of interest
 country_set = set([d['Country'] for d in manufacturing_data])
@@ -87,8 +197,8 @@ for c in sorted(country_set):
     
     s_r = Gamma('error in retention data', 20., 20./.15, value=.15)
     s_m = Gamma('error in manufacturing data', 20., 20./.05, value=.05)
-    s_d = Gamma('sampling error in admin dist data', 20., 20./.05, value=.05)
-    e_d = Normal('sys error in admin dist data', 0., 1./.01**2, value=0.)
+    s_d = Normal('sampling error in admin dist data', prior_s_d.stats()['mean'], prior_s_d.stats()['standard deviation']**-2, value=.05)
+    e_d = Normal('sys error in admin dist data', prior_e_d.stats()['mean'], prior_e_d.stats()['standard deviation']**-2, value=.05)
 
     vars += [s_r, s_m, s_d, e_d]
 
@@ -310,7 +420,7 @@ for c in sorted(country_set):
         #mc.use_step_method(AdaptiveMetropolis, nm, verbose=0)
 
         try:
-            iter = 300
+            iter = 1000
             thin = 200
             burn = 20000
             mc.sample(iter*thin+burn, burn, thin)
@@ -527,4 +637,4 @@ for c in sorted(country_set):
                      error_key='Ste_Survey_Itns', fmt='bs')
     decorate_figure()
 
-    savefig('bednets_%s.png' % c)
+    savefig('bednets_%s_%s.png' % (c, time.strftime('%Y_%m_%d_%H_%M')))

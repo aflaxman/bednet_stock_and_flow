@@ -117,8 +117,9 @@ Priors
 logit(p_l) ~ Normal(logit(.05), tau=1)
 s_r ~ Gamma(20, 20/.15)
 s_m ~ Gamma(20, 20/.05)
-s_d ~ Gamma(20, 20/.05)
-e_d ~ Normal(0, .01^2)
+
+s_d ~ Normal with mean and standard from empirical Bayes approach (described below)
+e_d ~ Normal with mean and standard from empirical Bayes approach (described below) 
 
 d[t] ~ Lognormal(log(min_i(d_i)), 1)
 m[t] ~ Lognormal(log(min_i(m_i)), 1)
@@ -132,6 +133,24 @@ log(H[t+1]/H[t]) ~ Normal(0, 1^2)
 T[t] ~ Normal(1, 1^2)
 
 W[t], H[t] >= 0
+
+
+Empirical Bayes Priors
+----------------------
+
+Instead of just making up priors for the systematic error and sampling
+error in the administrative distribution data, we will use the
+time-country data where both administrative and survey data are
+available.  For this we use the same model as above, but taking the
+survey data as "truth":
+
+    d1_i ~ (1 + e_d) * d2_i * (1 + N(0, s_d^2))
+
+To complete this model, we use uninformative hyper-priors on e_d and s_d:
+    s_d ~ Gamma(1., 1./.05)
+    e_d ~ Normal(0., 1./.5**2)
+
+
 
 
 Additional Information
