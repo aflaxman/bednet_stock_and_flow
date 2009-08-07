@@ -65,8 +65,8 @@ y = array([data_dict[k]['survey'] for k in sorted(data_dict.keys())])
 y_e = array([data_dict[k]['survey_ste'] for k in sorted(data_dict.keys())])
 
 
-prior_s_d = Gamma('prior on sampling error in admin dist data', 200., 200./.05, value=.05)
-prior_e_d = Normal('prior on sys error in admin dist data', 0., 1./.05**2, value=0.)
+prior_s_d = Gamma('prior on sampling error in admin dist data', 1., 1./.05, value=.05)
+prior_e_d = Normal('prior on sys error in admin dist data', 0., 1./.5**2, value=0.)
 prior_vars = [prior_s_d, prior_e_d]
 
 for k in data_dict:
@@ -80,7 +80,7 @@ for k in data_dict:
 mc = MCMC(prior_vars, verbose=1)
 mc.use_step_method(AdaptiveMetropolis, [prior_s_d, prior_e_d])
 iter = 1000
-thin = 50
+thin = 25
 burn = 20000
 try:
     mc.sample(iter*thin+burn, burn, thin)
@@ -143,12 +143,18 @@ yticks([])
 title(str(prior_s_d), fontsize=8)
 
 subplot(2,4,7)
-acorr(prior_e_d.trace() - mean(prior_e_d.trace()), maxlags=10, normed=True)
-acorr(prior_s_d.trace() - mean(prior_s_d.trace()), maxlags=10, normed=True)
-
-subplot(2,4,8)
 plot(prior_e_d.trace())
 plot(prior_s_d.trace())
+legend()
+title('MCMC trace')
+
+subplot(2,4,8)
+acorr(prior_e_d.trace() - mean(prior_e_d.trace()), maxlags=10, normed=True)
+acorr(prior_s_d.trace() - mean(prior_s_d.trace()), maxlags=10, normed=True)
+legend()
+title('MCMC autocorrelation')
+axis([-10,10,-.2,1.2])
+yticks([0,1])
 
 savefig('bednets_Priors_%s.png' % time.strftime('%Y_%m_%d_%H_%M'))
 
@@ -509,9 +515,9 @@ for c in sorted(country_set):
 
         if str(stoch).find('distribution waiting time') == -1:
             a,l = xticks()
-            l = [int(floor(a*100.)) for x in a]
+            l = [int(floor(x*100.)) for x in a]
             l[0] = str(l[0]) + '%'
-            xticks(floor(a*100.)/100., l, fontsize=small_fontsize)
+            xticks(floor(array(a)*100.)/100., l, fontsize=small_fontsize)
         title(str(stoch), fontsize=small_fontsize)
         ylabel('probability density')
         
@@ -526,7 +532,7 @@ for c in sorted(country_set):
         if len(shape(vals)) > 1:
             vals = vals[5]
 
-        vals -= mean(vals)
+        vals -= mean(vals, 0)
         acorr(vals, normed=True, maxlags=min(8, len(vals)))
         hlines([0],-8,8, linewidth=2, alpha=.7, linestyle='dotted')
         xticks([])

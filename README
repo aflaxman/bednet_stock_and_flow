@@ -5,6 +5,34 @@ To be written: Malaria, Bednets, Coverage, Data Sources, Outline of
 what follows.
 
 
+To Do
+-----
+
+Sparate compartments for itns and llins; llin model as is currently
+implemented, itn model with a retreatment probability, and only one
+compartment::
+
+
+  m  +---+  d  +------+ 1-r
+---->| W |---->|  H1  |----->
+     +---+     +------+      
+                 ^   |        
+                 |   | r
+                 +---+
+
+
+Hold out 20% of the data and see how well model can predict it.
+
+
+Try alternative error models.
+
+
+Include survey time (mean, standard deviation) as a covariate.
+
+
+Consider other relevant covariates, such as SES.
+
+
 Compartmental Model
 -------------------
 
