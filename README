@@ -106,14 +106,14 @@ There are 5 types of data that will drive parameter estimation:
 Manufacturing Data - Information on the number of nets procured by
 each country for distribution;  initial model::
 
-    m_i ~ m[t_i] * (1 + N(0, s_m^2))
+    log(m_i) ~ log(m[t_i]) + N(0, s_m^2)
 
 
 Administrative Distribution Data - Information on the number of nets
 distributed through the public sector supply chain in each country;
 initial model::
 
-    d1_i ~ (1 + e_d) * d[t_i] * (1 + N(0, s_d^2))
+    log(d1_i) ~ log(d[t_i]) + e_d + N(0, s_d^2)
 
 
 Household Survey Data - Information from DHS, MICS, and MIS where

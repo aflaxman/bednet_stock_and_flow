@@ -35,9 +35,9 @@ def load_csv(fname):
 
 ### load all data from csv files
 manufacturing_data = load_csv('manuitns_forabie07072009.csv')
-administrative_distribution_data = load_csv('total_admtotal_forabie28072009.csv')
-household_stock_data = load_csv('stock_surveyitns_forabie07072009.csv')
-household_distribution_data = load_csv('surveyitns_forabie7072009.csv')
+administrative_distribution_data = load_csv('total_admllins_forabie06082009.csv')
+household_stock_data = load_csv('stock_surveyitns_07082009.csv')
+household_distribution_data = load_csv('updated_total_svyllins_forabie06082009.csv')
 retention_data = load_csv('retention07072009.csv')
 
 
@@ -48,14 +48,14 @@ for d in administrative_distribution_data:
     key = (d['Country'], d['Year'])
     if not data_dict.has_key(key):
         data_dict[key] = {}
-    data_dict[key]['admin'] = float(d['Program_totalnets'])
+    data_dict[key]['admin'] = float(d['Program_Llns'])
 for d in household_distribution_data:
-    key = (d['Name'], d['Year'])
+    key = (d['Country'], d['Year'])
     if not data_dict.has_key(key):
         data_dict[key] = {}
-    data_dict[key]['survey'] = float(d['Survey_Itns'])
-    data_dict[key]['time'] =  float(d['Survey_Year'])-float(d['Year'])
-    data_dict[key]['survey_ste'] = float(d['Ste_Survey_Itns'])
+    data_dict[key]['survey'] = float(d['Total_LLINs'])
+    data_dict[key]['time'] =  float(d['Survey_Year2'])-float(d['Year'])
+    data_dict[key]['survey_ste'] = float(d['Total_st'])
 for key in data_dict.keys():
     if len(data_dict[key]) != 4:
         data_dict.pop(key)
@@ -74,7 +74,7 @@ for k in data_dict:
     @stochastic
     def net_distribution_data(value=data_dict[k]['admin'], survey_value=data_dict[k]['survey'],
                           s_d=prior_s_d, e_d=prior_e_d):
-        return normal_like(value / ((1 + e_d) * survey_value), 1., 1. / s_d**2)
+        return normal_like(log(value), e_d + log(survey_value), 1. / s_d**2)
     prior_vars.append(net_distribution_data)
 
 mc = MCMC(prior_vars, verbose=1)
@@ -82,10 +82,14 @@ mc.use_step_method(AdaptiveMetropolis, [prior_s_d, prior_e_d])
 iter = 1000
 thin = 25
 burn = 20000
-try:
-    mc.sample(iter*thin+burn, burn, thin)
-except:
-    pass
+
+# say "if True:" to skip the empirical prior computation, for testing
+if False:
+    iter = 100
+    thin = 1
+    burn = 0
+
+mc.sample(iter*thin+burn, burn, thin)
 
 print str(prior_s_d), prior_s_d.stats()
 print str(prior_e_d), prior_e_d.stats()
@@ -103,7 +107,7 @@ clf()
 subplot(1,2,1)
 errorbar(x, y, 1.96*y_e, fmt=',', alpha=.9, linewidth=1.5)
 plot(x_predicted, y_predicted, 'r:', alpha=.75, linewidth=2, label='predicted value')
-loglog([1000,exp(16)],[1000,exp(16)], 'k--', alpha=.5, linewidth=2, label='y=x')
+#loglog([1000,exp(16)],[1000,exp(16)], 'k--', alpha=.5, linewidth=2, label='y=x')
 
 y = np.concatenate((y_predicted, y_predicted[::-1]))
 x = np.concatenate(((1 + mean_e_d - 1.96*prior_e_d.stats()['standard deviation']) * y_predicted,
@@ -168,10 +172,10 @@ year_end = 2010
 
 for c in sorted(country_set):
     ### find some descriptive statistics to use as priors
-    nd_all = [float(d['Program_totalnets']) for d in administrative_distribution_data \
+    nd_all = [float(d['Program_Llns']) for d in administrative_distribution_data \
                   if d['Country'] == c] \
                   + [float(d['Survey_Itns']) for d in household_distribution_data \
-                         if d['Name'] == c and d['Year'] == d['Survey_Year']]
+                         if d['Country'] == c and d['Year'] == d['Survey_Year2']]
     # if there is no distribution data, make some up
     if len(nd_all) == 0:
         nd_all = [ 1000. ]
@@ -305,7 +309,7 @@ for c in sorted(country_set):
         @observed
         @stochastic(name='manufactured_%s_%s' % (d['Country'], d['Year']))
         def obs(value=float(d['Manu_Itns']), year=int(d['Year']), nm=nm, s_m=s_m):
-            return normal_like(value / nm[year - year_start], 1., 1. / s_m**2)
+            return normal_like(log(value),  log(nm[year - year_start]), 1. / s_m**2)
         manufacturing_obs.append(obs)
 
         # also take this opportinuty to set better initial values for the MCMC
@@ -326,14 +330,14 @@ for c in sorted(country_set):
 
         @observed
         @stochastic(name='administrative_distribution_%s_%s' % (d['Country'], d['Year']))
-        def obs(value=float(d['Program_totalnets']), year=int(d['Year']),
+        def obs(value=float(d['Program_Llns']), year=int(d['Year']),
                 nd=nd, s_d=s_d, e_d=e_d):
-            return normal_like(value / ((1 + e_d) * nd[year - year_start]), 1., 1. / s_d**2)
+            return normal_like(log(value), e_d + log(nd[year - year_start]), 1. / s_d**2)
         admin_distribution_obs.append(obs)
 
         # also take this opportinuty to set better initial values for the MCMC
         cur_val = copy.copy(nd.value)
-        cur_val[int(d['Year']) - year_start] = float(d['Program_totalnets'])
+        cur_val[int(d['Year']) - year_start] = float(d['Program_Llns'])
         nd.value = cur_val
 
     vars += [admin_distribution_obs]
@@ -341,15 +345,15 @@ for c in sorted(country_set):
 
     household_distribution_obs = []
     for d in household_distribution_data:
-        if d['Name'] != c:
+        if d['Country'] != c:
             continue
 
-        d2_i = float(d['Survey_Itns'])
+        d2_i = float(d['Total_LLINs'])
         estimate_year = int(d['Year'])
-        survey_year = int(d['Survey_Year'])
-        s_d2_i = float(d['Ste_Survey_Itns'])
+        survey_year = int(d['Survey_Year2'])
+        s_d2_i = float(d['Total_st'])
         @observed
-        @stochastic(name='household_distribution_%s_%s' % (d['Name'], d['Year']))
+        @stochastic(name='household_distribution_%s_%s' % (d['Country'], d['Year']))
         def obs(value=d2_i,
                 estimate_year=estimate_year,
                 survey_year=survey_year,
@@ -374,14 +378,14 @@ for c in sorted(country_set):
     ### observed household net stocks
     household_stock_obs = []
     for d in household_stock_data:
-        if d['Name'] != c:
+        if d['Country'] != c:
             continue
 
         @observed
-        @stochastic(name='household_stock_%s_%s' % (d['Name'], d['Year']))
-        def obs(value=float(d['Survey_Itns']),
-                year=int(d['Year']),
-                std_err=float(d['Ste_Survey_Itns']),
+        @stochastic(name='household_stock_%s_%s' % (d['Country'], d['Survey_Year2']))
+        def obs(value=float(d['SvyIndex_LLINstotal']),
+                year=int(d['Survey_Year2']),
+                std_err=float(d['SvyIndex_st']),
                 H=H):
             return normal_like(value, H[year-year_start], 1. / std_err ** 2)
         household_stock_obs.append(obs)
