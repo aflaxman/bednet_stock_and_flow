@@ -120,7 +120,7 @@ x = np.concatenate(((1 + mean_e_d - 1.96*prior_e_d.stats()['standard deviation']
 x = maximum(10, x)
 fill(x, y, alpha=.95, label='Total Err 95% UI', facecolor='.8', alpha=.5)
 
-axis([1000,exp(16),1000,exp(16)])
+axis([0,1e6,0,1e6])
 legend()
 ylabel('Nets distributed according to household survey')
 xlabel('Nets distributed according to administrative data')
@@ -610,23 +610,23 @@ for c in sorted(country_set):
     if len(admin_distribution_obs) > 0:
         label = 'Administrative Data'
         try:
-            scatter_data(administrative_distribution_data, c, 'Country', 'Program_totalnets',
+            scatter_data(administrative_distribution_data, c, 'Country', 'Program_Llns',
                          error_val=1.96 * s_d.stats()['mean'], label=label)
         except Exception, e:
             print 'Error: ', e
-            scatter_data(administrative_distribution_data, c, 'Country', 'Program_totalnets',
+            scatter_data(administrative_distribution_data, c, 'Country', 'Program_Llns',
                          error_val=1.96 * s_m.value, label=label)
     if len(household_distribution_obs) > 0:
         label = 'Survey Data'
         try:
-            scatter_data(household_distribution_data, c, 'Name', 'Survey_Itns',
-                         error_key='Ste_Survey_Itns', fmt='bs',
+            scatter_data(household_distribution_data, c, 'Country', 'Total_LLINs',
+                         error_key='Total_st', fmt='bs',
                          p_l=p_l.stats()['mean'][0], s_r=s_r.stats()['mean'],
                          label=label)
         except Exception, e:
             print 'Error: ', e
-            scatter_data(household_distribution_data, c, 'Name', 'Survey_Itns',
-                         error_key='Ste_Survey_Itns', fmt='bs',
+            scatter_data(household_distribution_data, c, 'Country', 'Total_LLINs',
+                         error_key='Total_st', fmt='bs',
                          p_l=p_l.value, s_r=s_r.value,
                          label=label)
     legend(loc='upper left')
@@ -643,8 +643,8 @@ for c in sorted(country_set):
     title('nets in households', fontsize=fontsize)
     plot_fit(H)
     if len(household_stock_obs) > 0:
-        scatter_data(household_stock_data, c, 'Name', 'Survey_Itns',
-                     error_key='Ste_Survey_Itns', fmt='bs')
+        scatter_data(household_stock_data, c, 'Country', 'SvyIndex_LLINstotal',
+                     error_key='SvyIndex_st', fmt='bs')
     decorate_figure()
 
     savefig('bednets_%s_%s.png' % (c, time.strftime('%Y_%m_%d_%H_%M')))
