@@ -1,6 +1,9 @@
 """  Script to fit stock-and-flow compartmental model of bednet distribution
 """
 
+# say `testing = True` to skip the empirical prior computation, for testing
+testing = False
+
 from pylab import *
 from pymc import *
 
@@ -79,16 +82,16 @@ for k in data_dict:
 
 mc = MCMC(prior_vars, verbose=1)
 mc.use_step_method(AdaptiveMetropolis, [prior_s_d, prior_e_d])
-iter = 1000
-thin = 25
-burn = 20000
 
-# say "if True:" to skip the empirical prior computation, for testing
-if False:
+if testing:
     iter = 100
     thin = 1
     burn = 0
-
+else:
+    iter = 1000
+    thin = 25
+    burn = 20000
+    
 mc.sample(iter*thin+burn, burn, thin)
 
 print str(prior_s_d), prior_s_d.stats()
@@ -162,6 +165,8 @@ yticks([0,1])
 
 savefig('bednets_Priors_%s.png' % time.strftime('%Y_%m_%d_%H_%M'))
 
+
+f = open('bednets_%s.csv' % time.strftime('%Y_%m_%d_%H_%M'), 'w')
 ### pick the country of interest
 country_set = set([d['Country'] for d in manufacturing_data])
 print 'fitting models for %d countries...' % len(country_set)
@@ -174,7 +179,7 @@ for c in sorted(country_set):
     ### find some descriptive statistics to use as priors
     nd_all = [float(d['Program_Llns']) for d in administrative_distribution_data \
                   if d['Country'] == c] \
-                  + [float(d['Survey_Itns']) for d in household_distribution_data \
+                  + [float(d['Total_LLINs']) for d in household_distribution_data \
                          if d['Country'] == c and d['Year'] == d['Survey_Year2']]
     # if there is no distribution data, make some up
     if len(nd_all) == 0:
@@ -390,7 +395,8 @@ for c in sorted(country_set):
             return normal_like(value, H[year-year_start], 1. / std_err ** 2)
         household_stock_obs.append(obs)
 
-    vars += [household_stock_obs]
+    ### This stoch is redundant, since all household distribution flows are sufficient to reconstruct
+    # vars += [household_stock_obs]
 
 
     ### observed net retention 
@@ -420,7 +426,11 @@ for c in sorted(country_set):
 
     if method == 'MCMC':
         map = MAP(vars)
-        map.fit(method='fmin_powell', verbose=1)
+        if testing:
+            map.fit(method='fmin', iterlim=1, verbose=1)
+        else:
+            map.fit(method='fmin', verbose=1)
+            
         for stoch in [s_r, s_m, s_d, e_d, p_l, T]:
             print '%s: %s' % (str(stoch), str(stoch.value))
 
@@ -430,9 +440,14 @@ for c in sorted(country_set):
         #mc.use_step_method(AdaptiveMetropolis, nm, verbose=0)
 
         try:
-            iter = 1000
-            thin = 200
-            burn = 20000
+            if testing:
+                iter = 10
+                thin = 1
+                burn = 0
+            else:
+                iter = 1000
+                thin = 200
+                burn = 20000
             mc.sample(iter*thin+burn, burn, thin)
         except:
             pass
@@ -445,6 +460,17 @@ for c in sorted(country_set):
         na.sample(1000)
 
 
+    # save results in output file
+    if f.tell() == 0:  # at start of file, write column headers
+        f.write('Country,Year,Total LLINs,Lower 95% UI,Upper 95% UI\n')
+        
+    for t in range(year_end - year_start):
+        f.write('%s,%d,' % (c,year_start + t))
+        val = [H.stats()['mean'][t]] + list(H.stats()['95% HPD interval'][t])
+        f.write('%.2f,%.2f,%.2f' % tuple(val))
+        f.write('\n')
+    f.flush()
+    
        ######################
       ### plot the model fit
      ###
@@ -648,3 +674,6 @@ for c in sorted(country_set):
     decorate_figure()
 
     savefig('bednets_%s_%s.png' % (c, time.strftime('%Y_%m_%d_%H_%M')))
+
+# close the output file
+f.close()
