@@ -90,7 +90,7 @@ def main(country_list=None):
         burn = 0
     else:
         iter = 1000
-        thin = 25
+        thin = 200
         burn = 20000
 
     mc.sample(iter*thin+burn, burn, thin)
@@ -168,6 +168,9 @@ def main(country_list=None):
 
 
     f = open(settings.PATH + settings.CSV_NAME, 'a')
+    #if f.tell() == 0:  # at start of file, write column headers
+    #    f.write('Country,Year,Total LLINs,Lower 95% UI,Upper 95% UI\n')
+
     ### pick the country of interest
     country_set = set([d['Country'] for d in manufacturing_data])
     print 'fitting models for %d countries...' % len(country_set)
@@ -318,7 +321,7 @@ def main(country_list=None):
             @observed
             @stochastic(name='manufactured_%s_%s' % (d['Country'], d['Year']))
             def obs(value=float(d['Manu_Itns']), year=int(d['Year']), nm=nm, s_m=s_m):
-                return normal_like(log(value),  log(nm[year - year_start]), 1. / s_m**2)
+                return normal_like(log(value),  log(max(1., nm[year - year_start])), 1. / s_m**2)
             manufacturing_obs.append(obs)
 
             # also take this opportinuty to set better initial values for the MCMC
@@ -341,7 +344,7 @@ def main(country_list=None):
             @stochastic(name='administrative_distribution_%s_%s' % (d['Country'], d['Year']))
             def obs(value=float(d['Program_Llns']), year=int(d['Year']),
                     nd=nd, s_d=s_d, e_d=e_d):
-                return normal_like(log(value), e_d + log(nd[year - year_start]), 1. / s_d**2)
+                return normal_like(log(value), e_d + log(max(1., nd[year - year_start])), 1. / s_d**2)
             admin_distribution_obs.append(obs)
 
             # also take this opportinuty to set better initial values for the MCMC
@@ -433,7 +436,7 @@ def main(country_list=None):
             if settings.TESTING:
                 map.fit(method='fmin', iterlim=1, verbose=1)
             else:
-                map.fit(method='fmin', verbose=1)
+                map.fit(method='fmin_powell', verbose=1)
 
             for stoch in [s_r, s_m, s_d, e_d, p_l, T]:
                 print '%s: %s' % (str(stoch), str(stoch.value))
@@ -463,11 +466,7 @@ def main(country_list=None):
                 print '%s: %s' % (str(stoch), str(stoch.value))
             na.sample(1000)
 
-
         # save results in output file
-        if f.tell() == 0:  # at start of file, write column headers
-            f.write('Country,Year,Total LLINs,Lower 95% UI,Upper 95% UI\n')
-
         for t in range(year_end - year_start):
             f.write('%s,%d,' % (c,year_start + t))
             val = [H.stats()['mean'][t]] + list(H.stats()['95% HPD interval'][t])
@@ -529,10 +528,14 @@ def main(country_list=None):
                      data_val/scale,
                      error_val/scale, fmt=fmt, alpha=.95, label=label)
 
+        def stoch_max(stoch):
+            return max(stoch.stats()['95% HPD interval'][:,1])
 
-        def decorate_figure(ystr='# of Nets (Millions)'):
+        def decorate_figure(ystr='# of Nets (Millions)', ymax=False):
             """ Set the axis, etc."""
             l,r,b,t = axis()
+            if ymax:
+                t = ymax
             vlines(range(year_start,year_end), 0, t, color=(0,0,0), alpha=.3)
             axis([year_start, year_end-1, 0, t])
             ylabel(ystr, fontsize=fontsize)
@@ -559,12 +562,11 @@ def main(country_list=None):
         def my_acorr(stoch):
             """ Plot the autocorrelation of the a stoch trace"""
             vals = copy.copy(stoch.trace())
-
             if shape(vals)[-1] == 1:
                 vals = ravel(vals)
 
             if len(shape(vals)) > 1:
-                vals = vals[5]
+                vals = array(vals)[:,5]
 
             vals -= mean(vals, 0)
             acorr(vals, normed=True, maxlags=min(8, len(vals)))
@@ -627,12 +629,12 @@ def main(country_list=None):
                 print 'Error: ', e
                 scatter_data(manufacturing_data, c, 'Country', 'Manu_Itns',
                              error_val=1.96 * s_m.value)
-        decorate_figure()
+        decorate_figure(ymax=stoch_max(nm))
 
         subplot(rows, cols/2, 1*(cols/2)+1)
         title('nets in warehouse', fontsize=fontsize)
         plot_fit(W)
-        decorate_figure()
+        decorate_figure(ymax=stoch_max(W))
 
         subplot(rows, cols/2, 2*(cols/2)+1)
         title('nets distributed', fontsize=fontsize)
@@ -660,7 +662,7 @@ def main(country_list=None):
                              p_l=p_l.value, s_r=s_r.value,
                              label=label)
         legend(loc='upper left')
-        decorate_figure()
+        decorate_figure(ymax=stoch_max(nd))
 
         subplot(rows, cols/2, 4*(cols/2)+1)
         title(str(T), fontsize=fontsize)
@@ -675,7 +677,7 @@ def main(country_list=None):
         if len(household_stock_obs) > 0:
             scatter_data(household_stock_data, c, 'Country', 'SvyIndex_LLINstotal',
                          error_key='SvyIndex_st', fmt='bs')
-        decorate_figure()
+        decorate_figure(ymax=stoch_max(H))
 
         savefig('bednets_%s_%s.png' % (c, time.strftime('%Y_%m_%d_%H_%M')))
 
@@ -692,6 +694,7 @@ if __name__ == '__main__':
     else:
         try:
             id = int(args[0])
-            main(country_list = [id])
         except ValueError:
             parser.error('country_id must be an integer')
+
+        main(country_list = [id])

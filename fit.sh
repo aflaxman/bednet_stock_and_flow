@@ -15,7 +15,7 @@
 
 
 # to run this script for all countries, do the following
-## for i in {1..50}; do qsub fit.sh $i; done
+## for i in {0..50}; do qsub fit.sh $i; done
 
 ## Put the hostname, current directory, and start date
 ## into variables, then write them to standard output.
