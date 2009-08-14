@@ -43,7 +43,14 @@ def main(country_list=None):
     household_stock_data = load_csv('stock_surveyitns_07082009.csv')
     household_distribution_data = load_csv('updated_total_svyllins_forabie06082009.csv')
     retention_data = load_csv('retention07072009.csv')
+    population_data = load_csv('population.csv')
 
+
+    # try cleaning some suspicious data
+    #for d in household_stock_data:
+    #    d['SvyIndex_st'] = sqrt(float(d['SvyIndex_st']))
+    #for d in household_distribution_data:
+    #    d['Total_st'] = sqrt(float(d['Total_st']))
 
     ### find parameters for simple model to predict administrative
     ### distribution data from household distribution data
@@ -111,7 +118,7 @@ def main(country_list=None):
     subplot(1,2,1)
     errorbar(x, y, 1.96*y_e, fmt=',', alpha=.9, linewidth=1.5)
     plot(x_predicted, y_predicted, 'r:', alpha=.75, linewidth=2, label='predicted value')
-    #loglog([1000,exp(16)],[1000,exp(16)], 'k--', alpha=.5, linewidth=2, label='y=x')
+    loglog([1000,exp(16)],[1000,exp(16)], 'k--', alpha=.5, linewidth=2, label='y=x')
 
     y = np.concatenate((y_predicted, y_predicted[::-1]))
     x = np.concatenate(((1 + mean_e_d - 1.96*prior_e_d.stats()['standard deviation']) * y_predicted,
@@ -124,13 +131,13 @@ def main(country_list=None):
     x = maximum(10, x)
     fill(x, y, alpha=.95, label='Total Err 95% UI', facecolor='.8', alpha=.5)
 
-    axis([0,1e6,0,1e6])
+    axis([1000,exp(16),1000,exp(16)])
     legend()
     ylabel('Nets distributed according to household survey')
     xlabel('Nets distributed according to administrative data')
     for k in data_dict:
         d = data_dict[k]
-        text(d['admin'], d['survey'], ' %s, %s' % k, fontsize=8, alpha=.7, verticalalignment='center')
+        text(d['admin'], d['survey'], ' %s, %s' % k, fontsize=12, alpha=.5, verticalalignment='center')
 
     subplot(2,4,3)
     hist(prior_e_d.trace(), normed=True, log=False)
@@ -139,7 +146,7 @@ def main(country_list=None):
            linewidth=2, alpha=.75, linestyle='dashed',
            color=['k', 'k', 'r', 'k', 'k'])
     yticks([])
-    title(str(prior_e_d), fontsize=8)
+    title(str(prior_e_d), fontsize=12)
 
     subplot(2,4,4)
     hist(prior_s_d.trace(), normed=True, log=False)
@@ -148,7 +155,7 @@ def main(country_list=None):
            linewidth=2, alpha=.75, linestyle='dashed',
            color=['k', 'k', 'r', 'k', 'k'])
     yticks([])
-    title(str(prior_s_d), fontsize=8)
+    title(str(prior_s_d), fontsize=12)
 
     subplot(2,4,7)
     plot(prior_e_d.trace())
@@ -179,9 +186,15 @@ def main(country_list=None):
     year_start = 1999
     year_end = 2010
 
+    population = zeros(year_end - year_start)
+    
     for c_id, c in enumerate(sorted(country_set)):
         if not c_id in country_list:
             continue
+
+        for d in population_data:
+            if d['Country'] == c:
+                population[int(d['Year']) - year_start] = float(d['Population'])
         
         ### find some descriptive statistics to use as priors
         nd_all = [float(d['Program_Llns']) for d in administrative_distribution_data \
@@ -274,7 +287,11 @@ def main(country_list=None):
         def H(H1=H1, H2=H2, H3=H3):
             return H1 + H2 + H3
 
-        vars += [nd, nm, W_0, H_0, W, T, H, H1, H2, H3]
+        @deterministic(name='coverage')
+        def coverage(H=H, population=population):
+            return 1. - exp(-1. * H / population)
+
+        vars += [nd, nm, W_0, H_0, W, T, H, H1, H2, H3, coverage]
 
 
         # set initial condition on W_0 to have no stockouts
@@ -453,8 +470,8 @@ def main(country_list=None):
                     burn = 0
                 else:
                     iter = 1000
-                    thin = 200
-                    burn = 20000
+                    thin = 500
+                    burn = 100000
                 mc.sample(iter*thin+burn, burn, thin)
             except:
                 pass
@@ -482,21 +499,36 @@ def main(country_list=None):
         small_fontsize = 12
         tiny_fontsize = 10
 
-        def plot_fit(f, scale=1.e6):
+        def plot_fit(f, scale=1.e6, style='lines'):
             """ Plot the posterior mean and 95% UI
             """
-            plot(year_start + arange(len(f.value)),
-                 f.stats()['mean']/scale, 'k-', linewidth=2, label='Est Mean')
+            if style=='lines':
+                x = year_start + arange(len(f.value))
+                y = f.stats()['mean']/scale
+                lb = f.stats()['quantiles'][2.5]/scale
+                ub = f.stats()['quantiles'][97.5]/scale
+            elif style=='steps':
+                x = []
+                for ii in range(len(f.value)):
+                    x.append(ii)
+                    x.append(ii)
 
-            x = np.concatenate((year_start + arange(len(f.value)),
-                                year_start + arange(len(f.value))[::-1]))
-            y = np.concatenate((f.stats()['quantiles'][2.5]/scale,
-                                f.stats()['quantiles'][97.5][::-1]/scale))
+                y = (f.stats()['mean']/scale)[x]
+                lb = (f.stats()['quantiles'][2.5]/scale)[x]
+                ub = (f.stats()['quantiles'][97.5]/scale)[x]
+                x = array(x[1:] + [ii+1]) + year_start
+            else:
+                raise ValueError, 'unrecognized style option: %s' % str(style)
+                
+            plot(x, y, 'k-', linewidth=2, label='Est Mean')
+
+            x = np.concatenate((x, x[::-1]))
+            y = np.concatenate((lb, ub[::-1]))
             fill(x, y, alpha=.95, label='Est 95% UI', facecolor='.8', alpha=.5)
 
         def scatter_data(data_list, country, country_key, data_key,
                          error_key=None, error_val=None,  p_l=None, s_r=None,
-                         fmt='go', scale=1.e6, label=''):
+                         fmt='go', scale=1.e6, label='', offset=0.):
             """ This convenience function is a little bit of a mess, but it
             avoids duplicating code for scatter-plotting various types of
             data, with various types of error bars
@@ -524,7 +556,8 @@ def main(country_list=None):
 
             elif error_val:
                 error_val = 1.96 * error_val * data_val
-            errorbar([float(d['Year']) for d in data_list if d[country_key] == c],
+            x = array([float(d['Year']) for d in data_list if d[country_key] == c])
+            errorbar(x + offset,
                      data_val/scale,
                      error_val/scale, fmt=fmt, alpha=.95, label=label)
 
@@ -535,7 +568,7 @@ def main(country_list=None):
             """ Set the axis, etc."""
             l,r,b,t = axis()
             if ymax:
-                t = ymax
+                t = ymax*1.2
             vlines(range(year_start,year_end), 0, t, color=(0,0,0), alpha=.3)
             axis([year_start, year_end-1, 0, t])
             ylabel(ystr, fontsize=fontsize)
@@ -620,54 +653,56 @@ def main(country_list=None):
         rows = 5
         subplot(rows, cols/2, 0*(cols/2)+1)
         title('nets manufactured', fontsize=fontsize)
-        plot_fit(nm)
+        plot_fit(nm, style='steps')
         if len(manufacturing_obs) > 0:
             try:
                 scatter_data(manufacturing_data, c, 'Country', 'Manu_Itns',
-                             error_val=1.96 * s_m.stats()['mean'])
+                             error_val=1.96 * s_m.stats()['mean'], offset=.5)
             except Exception, e:
                 print 'Error: ', e
                 scatter_data(manufacturing_data, c, 'Country', 'Manu_Itns',
-                             error_val=1.96 * s_m.value)
-        decorate_figure(ymax=stoch_max(nm))
+                             error_val=1.96 * s_m.value, offset=.5)
+        decorate_figure(ymax=stoch_max(nm)/1.e6)
 
         subplot(rows, cols/2, 1*(cols/2)+1)
         title('nets in warehouse', fontsize=fontsize)
         plot_fit(W)
-        decorate_figure(ymax=stoch_max(W))
+        decorate_figure(ymax=stoch_max(W)/1.e6)
 
         subplot(rows, cols/2, 2*(cols/2)+1)
         title('nets distributed', fontsize=fontsize)
-        plot_fit(nd)
+        plot_fit(nd, style='steps')
         if len(admin_distribution_obs) > 0:
             label = 'Administrative Data'
             try:
                 scatter_data(administrative_distribution_data, c, 'Country', 'Program_Llns',
-                             error_val=1.96 * s_d.stats()['mean'], label=label)
+                             error_val=1.96 * s_d.stats()['mean'], label=label, offset=.5)
             except Exception, e:
                 print 'Error: ', e
                 scatter_data(administrative_distribution_data, c, 'Country', 'Program_Llns',
-                             error_val=1.96 * s_m.value, label=label)
+                             error_val=1.96 * s_m.value, label=label, offset=.5)
         if len(household_distribution_obs) > 0:
             label = 'Survey Data'
             try:
                 scatter_data(household_distribution_data, c, 'Country', 'Total_LLINs',
                              error_key='Total_st', fmt='bs',
                              p_l=p_l.stats()['mean'][0], s_r=s_r.stats()['mean'],
-                             label=label)
+                             label=label, offset=.5)
             except Exception, e:
                 print 'Error: ', e
                 scatter_data(household_distribution_data, c, 'Country', 'Total_LLINs',
                              error_key='Total_st', fmt='bs',
                              p_l=p_l.value, s_r=s_r.value,
-                             label=label)
+                             label=label, offset=.5)
         legend(loc='upper left')
-        decorate_figure(ymax=stoch_max(nd))
+        decorate_figure(ymax=stoch_max(nd)/1.e6)
 
         subplot(rows, cols/2, 4*(cols/2)+1)
-        title(str(T), fontsize=fontsize)
-        plot_fit(T, scale=1.)
-        decorate_figure(ystr='Years')
+        title(str(coverage), fontsize=fontsize)
+        plot_fit(coverage, scale=.01)
+        if max(coverage.stats()['mean']) > .1:
+            hlines([80], 1999, 2009, linestyle='dotted', color='blue', alpha=.5)
+        decorate_figure(ystr='At least one net (%)')
         #l,r,b,t = axis()
         #axis([l, r, 0, 5])
 
@@ -677,7 +712,7 @@ def main(country_list=None):
         if len(household_stock_obs) > 0:
             scatter_data(household_stock_data, c, 'Country', 'SvyIndex_LLINstotal',
                          error_key='SvyIndex_st', fmt='bs')
-        decorate_figure(ymax=stoch_max(H))
+        decorate_figure(ymax=stoch_max(H)/1.e6)
 
         savefig('bednets_%s_%s.png' % (c, time.strftime('%Y_%m_%d_%H_%M')))
 
