@@ -3,7 +3,7 @@
 # PATH is important for running on the cluster; all paths should end with a '/'
 # PATH = './'  # use current directory
 PATH = '/net/gs/vol1/home/abie/bednet_stock_and_flow/'
-CSV_NAME = 'bednets.csv'
+CSV_NAME = 'output.csv'
 
 # set TESTING to True to speed up all calculations (and make them much less accurate)
 TESTING = False

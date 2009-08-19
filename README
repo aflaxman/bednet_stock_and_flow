@@ -8,6 +8,29 @@ what follows.
 To Do
 -----
 
+Update household stock csv to have newest numbers, decide if this data
+should be included in the model.
+
+
+Check if Poisson model of ownership is as good as more complicated
+models.
+
+
+Check if # nets is correlated with household size.
+
+
+Include survey time (mean, standard deviation) as a covariate.
+Planned approach: round mean survey date to nearest year, and apply
+survey results to household stock for that year; include residual and
+standard dev as covariates in "random effect" i.e. to predict
+dispersion of the household stock measurement beyond sampling error.
+Fit the random effect covariate coefficients in empirical prior phase.
+
+
+Try making p_l a latent random variable with a "random effect" to
+control dispersion.
+
+
 Sparate compartments for itns and llins; llin model as is currently
 implemented, itn model with a retreatment probability, and only one
 compartment::
@@ -25,14 +48,6 @@ Hold out 20% of the data and see how well model can predict it.
 
 
 Try alternative error models.
-
-
-Include survey time (mean, standard deviation) as a covariate.
-Planned approach: round mean survey date to nearest year, and apply
-survey results to household stock for that year; include residual and
-standard dev as covariates in "random effect" i.e. to predict
-dispersion of the household stock measurement beyond sampling error.
-Fit the random effect covariate coefficients in empirical prior phase.
 
 
 Consider other relevant covariates, such as SES.
@@ -68,6 +83,12 @@ are distributed with a first-in-first-out system, this is:
 
 T[t] = \sum_{x > 0} (m[t] - (d[t] + ... + d[t+x] - W[t])^+)^+ / m[t]
 
+But the primary quantity of interest in this investigation is the
+fraction of households with at least one net.  Assuming the number of
+nets in a household is Poisson, this is:
+
+coverage[t] = 1 - exp(-H[t] / population[t] * household_size)
+
 
 Model parameters
 ----------------
@@ -77,8 +98,7 @@ d[t] := the number of nets distributed during time period t (t = 0, ..., 9)
 m[t] := the number of nets manufactured during time period t (t = 0, ..., 9)
 W_0 := the number of nets in warehouses at time 0
 H_0 := the number of nets in households at time 0
-
-(The model for a single country has 23 parameters.)
+household_size 
 
 
 Model Dynamics
@@ -106,7 +126,7 @@ The model dynamics make two major assumptions:
 Statistical Model
 -----------------
 
-There are 5 types of data that will drive parameter estimation:
+There are 6 types of data that will drive parameter estimation:
 
 Manufacturing Data - Information on the number of nets procured by
 each country for distribution;  initial model::
@@ -144,6 +164,19 @@ distributed::
         (where r_i := fraction retained and T_i := follow up time for
         the study)
 
+
+Household Size Data - Information from household studies on how many
+people live in a household::
+
+    household_size[i] ~ N(mu_household_size, s_{household_size[i]}^2
+                          + s_household_size^2)
+
+then household size for the country under consideration is modelled as
+a latent variable that is constant over time, drawn from the same distribution::
+
+    household_size ~ N(mu_household_size, s_household_size^2)
+    
+
 Priors
 ------
 
@@ -167,6 +200,9 @@ T[t] ~ Normal(1, 1^2)
 
 W[t], H[t] >= 0
 
+mu_household_size ~ Gamma(1, 1/5)
+s_household_size ~ Gamma(20, 20/.05)
+
 
 Empirical Bayes Priors
 ----------------------
@@ -177,7 +213,7 @@ time-country data where both administrative and survey data are
 available.  For this we use the same model as above, but taking the
 survey data as "truth":
 
-    d1_i ~ (1 + e_d) * d2_i * (1 + N(0, s_d^2))
+    log(d1_i) ~ log(d2_i) + e_d + N(0, s_d^2)
 
 To complete this model, we use uninformative hyper-priors on e_d and s_d:
     s_d ~ Gamma(1., 1./.05)

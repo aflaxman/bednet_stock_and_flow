@@ -44,22 +44,19 @@ def main(country_list=None):
     household_distribution_data = load_csv('updated_total_svyllins_forabie06082009.csv')
     retention_data = load_csv('retention07072009.csv')
     population_data = load_csv('population.csv')
+    household_size_data = load_csv('numllins_owned_forabie18082009.csv')
 
-
-    # try cleaning some suspicious data
-    #for d in household_stock_data:
-    #    d['SvyIndex_st'] = sqrt(float(d['SvyIndex_st']))
-    #for d in household_distribution_data:
-    #    d['Total_st'] = sqrt(float(d['Total_st']))
 
     ### find parameters for simple model to predict administrative
     ### distribution data from household distribution data
     data_dict = {}
+    # store admin data for each country-year
     for d in administrative_distribution_data:
         key = (d['Country'], d['Year'])
         if not data_dict.has_key(key):
             data_dict[key] = {}
         data_dict[key]['admin'] = float(d['Program_Llns'])
+    # store household data for each country-year
     for d in household_distribution_data:
         key = (d['Country'], d['Year'])
         if not data_dict.has_key(key):
@@ -67,6 +64,7 @@ def main(country_list=None):
         data_dict[key]['survey'] = float(d['Total_LLINs'])
         data_dict[key]['time'] =  float(d['Survey_Year2'])-float(d['Year'])
         data_dict[key]['survey_ste'] = float(d['Total_st'])
+    # keep only country-years with both admin and survey data
     for key in data_dict.keys():
         if len(data_dict[key]) != 4:
             data_dict.pop(key)
@@ -85,9 +83,11 @@ def main(country_list=None):
         @stochastic
         def net_distribution_data(value=data_dict[k]['admin'], survey_value=data_dict[k]['survey'],
                               s_d=prior_s_d, e_d=prior_e_d):
-            return normal_like(log(value), e_d + log(survey_value), 1. / s_d**2)
+            return normal_like(log(value), log(survey_value) + e_d, 1. / s_d**2)
         prior_vars.append(net_distribution_data)
 
+
+    # sample from empirical prior distribution via MCMC
     mc = MCMC(prior_vars, verbose=1)
     mc.use_step_method(AdaptiveMetropolis, [prior_s_d, prior_e_d])
 
@@ -102,6 +102,8 @@ def main(country_list=None):
 
     mc.sample(iter*thin+burn, burn, thin)
 
+
+    # output information on empirical prior distribution
     print str(prior_s_d), prior_s_d.stats()
     print str(prior_e_d), prior_e_d.stats()
 
@@ -186,12 +188,13 @@ def main(country_list=None):
     year_start = 1999
     year_end = 2010
 
-    population = zeros(year_end - year_start)
-    
     for c_id, c in enumerate(sorted(country_set)):
+        # hacky way to run only a subset of countries, for parallelizing on the cluster
         if not c_id in country_list:
             continue
 
+        # get population data for this country, to calculate LLINs per capita
+        population = zeros(year_end - year_start)
         for d in population_data:
             if d['Country'] == c:
                 population[int(d['Year']) - year_start] = float(d['Population'])
@@ -206,15 +209,12 @@ def main(country_list=None):
             nd_all = [ 1000. ]
 
         nd_min = min(nd_all)
-        nd_avg = mean(nd_all)
-        nd_ste = std(nd_all)
 
         nm_all = [float(d['Manu_Itns']) for d in manufacturing_data if d['Country'] == c]
         # if there is no manufacturing data, make some up
         if len(nm_all) == 0:
             nm_all = [ 1000. ]
         nm_min = min(nm_all)
-        nm_avg = mean(nm_all)
 
 
         ### setup the model variables
@@ -228,7 +228,16 @@ def main(country_list=None):
         p_l = InvLogit('Pr[net is lost]', logit_p_l)
 
         vars += [logit_p_l, p_l]
-
+        
+        
+        mu_household_size = Gamma('regional average household size', 1., 1./5.)
+        s_household_size = Gamma('regional average household size se', 20, 20/.05)
+        @deterministic(name='regional average household size precision')
+        def tau_household_size(se=s_household_size):
+            return 1. / se**2
+        household_size = Normal('household size', mu_household_size, tau_household_size)
+        vars += [mu_household_size, s_household_size, tau_household_size, household_size]
+        
 
         s_r = Gamma('error in retention data', 20., 20./.15, value=.15)
         s_m = Gamma('error in manufacturing data', 20., 20./.05, value=.05)
@@ -288,8 +297,8 @@ def main(country_list=None):
             return H1 + H2 + H3
 
         @deterministic(name='coverage')
-        def coverage(H=H, population=population):
-            return 1. - exp(-1. * H / population)
+        def coverage(H=H, population=population, household_size=household_size):
+            return 1. - exp(-1. * H / population * household_size)
 
         vars += [nd, nm, W_0, H_0, W, T, H, H1, H2, H3, coverage]
 
@@ -438,6 +447,19 @@ def main(country_list=None):
         vars += [retention_obs]
 
 
+        ### observed net retention 
+
+        household_size_obs = []
+        for d in household_size_data:
+            @observed
+            @stochastic(name='household_size_%s_%s' % (d['Country'], d['Survey_Year2']))
+            def obs(value=float(d['HHnum_Mean']), s_i=float(d['HHnum_SE']),
+                    mu=mu_household_size, s_od=s_household_size):
+                return normal_like(value, mu, 1. / (s_od**2 + s_i**2))
+            household_size_obs.append(obs)
+
+        vars += [household_size_obs]
+
 
            #################
           ### fit the model
@@ -470,8 +492,8 @@ def main(country_list=None):
                     burn = 0
                 else:
                     iter = 1000
-                    thin = 500
-                    burn = 100000
+                    thin = 1000
+                    burn = 250000
                 mc.sample(iter*thin+burn, burn, thin)
             except:
                 pass
@@ -486,7 +508,7 @@ def main(country_list=None):
         # save results in output file
         for t in range(year_end - year_start):
             f.write('%s,%d,' % (c,year_start + t))
-            val = [H.stats()['mean'][t]] + list(H.stats()['95% HPD interval'][t])
+            val = [100*coverage.stats()['mean'][t]] + list(100*coverage.stats()['95% HPD interval'][t])
             f.write('%.2f,%.2f,%.2f' % tuple(val))
             f.write('\n')
         f.flush()
@@ -714,7 +736,7 @@ def main(country_list=None):
                          error_key='SvyIndex_st', fmt='bs')
         decorate_figure(ymax=stoch_max(H)/1.e6)
 
-        savefig('bednets_%s_%s.png' % (c, time.strftime('%Y_%m_%d_%H_%M')))
+        savefig('bednets_%s_%d_%s.png' % (c, c_id, time.strftime('%Y_%m_%d_%H_%M')))
 
     # close the output file
     f.close()
