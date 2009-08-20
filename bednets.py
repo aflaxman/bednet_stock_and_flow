@@ -232,7 +232,7 @@ def main(country_list=None):
         @deterministic(name='regional average household size precision')
         def tau_household_size(se=s_household_size):
             return 1. / se**2
-        household_size = Normal('household size', mu_household_size, tau_household_size)
+        household_size = Normal('country household size', mu_household_size, tau_household_size)
         vars += [mu_household_size, s_household_size, tau_household_size, household_size]
         
 
@@ -503,26 +503,33 @@ def main(country_list=None):
             na.sample(1000)
 
         # save results in output file
+        col_headings = ['Country', 'Year',
+                        'LLINs Manufactured (Thousands)', 'LLINs Manufactured Lower CI', 'LLINs Manufactured Upper CI',
+                        'LLINs Distributed (Thousands)', 'LLINs Distributed Lower CI', 'LLINs Distributed Upper CI',
+                        'LLINs Owned (Thousands)', 'LLINs Owned Lower CI', 'LLINs Owned Upper CI',
+                        'Coverage (Percent)', 'Coverage Lower CI', 'Coverage Upper CI']
         if not settings.CSV_NAME in os.listdir(settings.PATH):
             f = open(settings.PATH + settings.CSV_NAME, 'a')
-            f.write('%s\n' % ','.join(['Country', 'Year',
-                                       'LLINs Distributed (Thousands)', 'LLINs Distributed Lower CI', 'LLINs Distributed Upper CI',
-                                       'LLINs Owned (Thousands)', 'LLINs Owned Lower CI', 'LLINs Owned Upper CI',
-                                       'Coverage (Percent)', 'Coverage Lower CI', 'Coverage Upper CI']))
+            f.write('%s\n' % ','.join(col_headings))
         else:
             # sleep for a random time interval to avoid collisions when writing results
-            time.sleep(random.random()*30)
+            try:
+                time.sleep(random.random()*30)
+            except:
+                pass
             f = open(settings.PATH + settings.CSV_NAME, 'a')
 
         for t in range(year_end - year_start):
             f.write('%s,%d,' % (c,year_start + t))
             if t == year_end - year_start - 1:
                 val = [-1, -1, -1]
+                val += [-1, -1, -1]
             else:
-                val = [nd.stats()['mean'][t]/1000] + list(nd.stats()['95% HPD interval'][t]/1000)
+                val = [nm.stats()['mean'][t]/1000] + list(nm.stats()['95% HPD interval'][t]/1000)
+                val += [nd.stats()['mean'][t]/1000] + list(nd.stats()['95% HPD interval'][t]/1000)
             val += [H.stats()['mean'][t]/1000] + list(H.stats()['95% HPD interval'][t]/1000)
             val += [100*coverage.stats()['mean'][t]] + list(100*coverage.stats()['95% HPD interval'][t])
-            f.write('%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f' % tuple(val))
+            f.write(','.join(['%.2f']*(len(col_headings)-2)) % tuple(val))
             f.write('\n')
         f.close()
 
@@ -570,13 +577,8 @@ def main(country_list=None):
             """
 
             data_val = array([float(d[data_key]) for d in data_list if d[country_key] == c])
-            #if p_l == None:
-            #    data_val = array([float(d[data_key]) for d in data_list if d[country_key] == c])
-            #else:
-            #    # account for the nets lost prior to survey
-            #    data_val = array([
-            #            float(d[data_key]) / (1-p_l)**(int(d['Survey_Year']) - int(d['Year']) - .5)
-            #            for d in data_list if d[country_key] == c])
+            if len(data_val) == 0:
+                return
 
             if error_key:
                 error_val = array([1.96*float(d[error_key]) \
@@ -611,20 +613,31 @@ def main(country_list=None):
 
         def my_hist(stoch):
             """ Plot a histogram of the posterior distribution of a stoch"""
-            hist(stoch.trace(), normed=True, log=False)
-            l,r,b,t = axis()
-            vlines(ravel(stoch.stats()['quantiles'].values()), b, t,
-                   linewidth=2, alpha=.75, linestyle='dashed',
-                   color=['k', 'k', 'r', 'k', 'k'])
+            hist(stoch.trace(), normed=True, log=False, label=str(stoch), alpha=.5)
+            #l,r,b,t = axis()
+            #vlines(ravel(stoch.stats()['quantiles'].values()), b, t,
+            #       linewidth=2, alpha=.75, linestyle='dashed',
+            #       color=['black', 'black', 'red', 'black', 'black'])
             yticks([])
 
             if str(stoch).find('distribution waiting time') == -1:
                 a,l = xticks()
                 l = [int(floor(x*100.)) for x in a]
                 l[0] = str(l[0]) + '%'
+                xticks([])
                 xticks(floor(array(a)*100.)/100., l, fontsize=small_fontsize)
-            title(str(stoch), fontsize=small_fontsize)
+            #title(str(stoch), fontsize=small_fontsize)
             ylabel('probability density')
+
+            leg = legend(loc='upper left')
+            # the matplotlib.patches.Rectangle instance surrounding the legend
+            frame = leg.get_frame()  
+            frame.set_alpha(0.)    # set the frame face color to light gray
+            frame.set_edgecolor('white')    # set the frame face color to light gray
+            
+            # matplotlib.text.Text instances
+            for t in leg.get_texts():
+                t.set_fontsize('small')    # the legend text fontsize
 
 
         def my_acorr(stoch):
@@ -640,10 +653,10 @@ def main(country_list=None):
             acorr(vals, normed=True, maxlags=min(8, len(vals)))
             hlines([0],-8,8, linewidth=2, alpha=.7, linestyle='dotted')
             xticks([])
-            ylabel(str(stoch).replace('error in ', '').replace('data','err'),
-                   fontsize=tiny_fontsize)
+            #ylabel(str(stoch).replace('error in ', '').replace('data','err'),
+            #       fontsize=tiny_fontsize)
             yticks([0,1], fontsize=tiny_fontsize)
-            title('mcmc autocorrelation', fontsize=small_fontsize)
+            #title('mcmc autocorrelation', fontsize=small_fontsize)
 
 
         ### actual plotting code start here
@@ -653,13 +666,16 @@ def main(country_list=None):
                  bbox={'facecolor': 'black', 'alpha': 1},
                   color='white', verticalalignment='center', horizontalalignment='right')
 
-        stochs_to_plot = [s_m, s_d, e_d, p_l, s_r, nm, nd, W, H, T]
-        stochs_to_hist = [s_m, s_d, e_d, p_l, s_r]
+        stochs_to_plot = [s_m, s_d, e_d, p_l, s_r, nm, nd, W, H, T, household_size, mu_household_size, s_household_size]
 
         cols = 4
         rows = len(stochs_to_plot)
 
+        figtext(6.05/8., .925, 'mcmc trace', horizontalalignment='center', verticalalignment='top', fontsize=small_fontsize)
+        figtext(6.85/8., .925, 'mcmc autocorrelation', horizontalalignment='center', verticalalignment='top', fontsize=small_fontsize)
+        
         for ii, stoch in enumerate(stochs_to_plot):
+            figtext(6.45/8., .097 + .814*(1-(ii+.0)/rows), str(stoch), horizontalalignment='center', verticalalignment='top', fontsize=small_fontsize)
             subplot(rows, cols*2, 2*cols - 1 + ii*2*cols)
             try:
                 plot(stoch.trace(), linewidth=2, alpha=.5)
@@ -668,9 +684,9 @@ def main(country_list=None):
 
             xticks([])
             yticks([])
-            title('mcmc trace', fontsize=small_fontsize)
-            ylabel(str(stoch).replace('error in ', '').replace('data','err'),
-                   fontsize=tiny_fontsize)
+            #title('mcmc trace', fontsize=small_fontsize)
+            #ylabel(str(stoch).replace('error in ', '').replace('data','err'),
+            #       fontsize=tiny_fontsize)
 
             subplot(rows, cols*2, 2*cols + ii*2*cols)
             try:
@@ -678,12 +694,23 @@ def main(country_list=None):
             except Exception, e:
                 print 'Error: ', e
 
-            try:
-                if stoch in stochs_to_hist:
-                    subplot(len(stochs_to_hist), cols, ii*cols + 3)
-                    my_hist(stoch)
-            except Exception, e:
-                print 'Error: ', e
+        subplot(5, cols, 0*cols + 3)
+        my_hist(s_m)
+
+        subplot(5, cols, 1*cols + 3)
+        my_hist(s_d)
+        my_hist(e_d)
+
+        subplot(5, cols, 2*cols + 3)
+        my_hist(p_l)
+        my_hist(s_r)
+
+        subplot(5, cols, 3*cols + 3)
+        my_hist(mu_household_size)
+        my_hist(household_size)
+
+        subplot(5, cols, 4*cols + 3)
+        my_hist(s_household_size)
 
         rows = 5
         subplot(rows, cols/2, 0*(cols/2)+1)
@@ -737,6 +764,14 @@ def main(country_list=None):
         plot_fit(coverage, scale=.01)
         if max(coverage.stats()['mean']) > .1:
             hlines([80], 1999, 2009, linestyle='dotted', color='blue', alpha=.5)
+
+        # calculate coverage from fraction of households with zero llins
+        for d in household_size_data:
+            d['coverage'] = 1. - float(d['Per_0LLINs'])
+            mean_survey_date = time.strptime(d['Mean_SvyDate'], '%d-%b-%y')
+            d['Year'] = mean_survey_date[0] + mean_survey_date[1]/12.
+        scatter_data(household_size_data, c, 'Country', 'coverage', 'LLINs0_SE',
+                     fmt='bs', scale=.01)
         decorate_figure(ystr='At least one net (%)')
         #l,r,b,t = axis()
         #axis([l, r, 0, 5])
@@ -744,9 +779,11 @@ def main(country_list=None):
         subplot(rows, cols/2, 3*(cols/2)+1)
         title('nets in households', fontsize=fontsize)
         plot_fit(H)
-        if len(household_stock_obs) > 0:
-            scatter_data(household_stock_data, c, 'Country', 'SvyIndex_LLINstotal',
-                         error_key='SvyIndex_st', fmt='bs')
+        for d in household_size_data:
+            mean_survey_date = time.strptime(d['Mean_SvyDate'], '%d-%b-%y')
+            d['Year'] = mean_survey_date[0] + mean_survey_date[1]/12.
+        scatter_data(household_stock_data, c, 'Country', 'SvyIndex_LLINstotal',
+                     error_key='SvyIndex_st', fmt='bs')
         decorate_figure(ymax=stoch_max(H)/1.e6)
 
         savefig('bednets_%s_%d_%s.png' % (c, c_id, time.strftime('%Y_%m_%d_%H_%M')))
