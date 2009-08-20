@@ -9,6 +9,7 @@ from pymc import *
 import copy
 import time
 import optparse
+import random
 
 def load_csv(fname):
     """ Quick function to load each row of a csv file as a dict
@@ -40,7 +41,7 @@ def main(country_list=None):
     ### load all data from csv files
     manufacturing_data = load_csv('manuitns_forabie07072009.csv')
     administrative_distribution_data = load_csv('total_admllins_forabie06082009.csv')
-    household_stock_data = load_csv('stock_surveyitns_07082009.csv')
+    household_stock_data = load_csv('stock_surveyitns_19082009.csv')
     household_distribution_data = load_csv('updated_total_svyllins_forabie06082009.csv')
     retention_data = load_csv('retention07072009.csv')
     population_data = load_csv('population.csv')
@@ -175,10 +176,6 @@ def main(country_list=None):
 
     savefig(settings.PATH + 'bednets_Priors_%s.png' % time.strftime('%Y_%m_%d_%H_%M'))
 
-
-    f = open(settings.PATH + settings.CSV_NAME, 'a')
-    #if f.tell() == 0:  # at start of file, write column headers
-    #    f.write('Country,Year,Total LLINs,Lower 95% UI,Upper 95% UI\n')
 
     ### pick the country of interest
     country_set = set([d['Country'] for d in manufacturing_data])
@@ -506,12 +503,28 @@ def main(country_list=None):
             na.sample(1000)
 
         # save results in output file
+        if not settings.CSV_NAME in os.listdir(settings.PATH):
+            f = open(settings.PATH + settings.CSV_NAME, 'a')
+            f.write('%s\n' % ','.join(['Country', 'Year',
+                                       'LLINs Distributed (Thousands)', 'LLINs Distributed Lower CI', 'LLINs Distributed Upper CI',
+                                       'LLINs Owned (Thousands)', 'LLINs Owned Lower CI', 'LLINs Owned Upper CI',
+                                       'Coverage (Percent)', 'Coverage Lower CI', 'Coverage Upper CI']))
+        else:
+            # sleep for a random time interval to avoid collisions when writing results
+            time.sleep(random.random()*30)
+            f = open(settings.PATH + settings.CSV_NAME, 'a')
+
         for t in range(year_end - year_start):
             f.write('%s,%d,' % (c,year_start + t))
-            val = [100*coverage.stats()['mean'][t]] + list(100*coverage.stats()['95% HPD interval'][t])
-            f.write('%.2f,%.2f,%.2f' % tuple(val))
+            if t == year_end - year_start - 1:
+                val = [-1, -1, -1]
+            else:
+                val = [nd.stats()['mean'][t]/1000] + list(nd.stats()['95% HPD interval'][t]/1000)
+            val += [H.stats()['mean'][t]/1000] + list(H.stats()['95% HPD interval'][t]/1000)
+            val += [100*coverage.stats()['mean'][t]] + list(100*coverage.stats()['95% HPD interval'][t])
+            f.write('%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f,%.2f' % tuple(val))
             f.write('\n')
-        f.flush()
+        f.close()
 
            ######################
           ### plot the model fit

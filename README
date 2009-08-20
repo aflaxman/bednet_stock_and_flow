@@ -8,8 +8,22 @@ what follows.
 To Do
 -----
 
-Update household stock csv to have newest numbers, decide if this data
-should be included in the model.
+Decide if household stock csv should be included in the model (leaning
+towards no).  Change plot to show it at mean survey date, instead of
+at year change.
+
+
+Rescale nets distributed during partial year to estimate total nets
+that would have been distributed during that year if rate was
+maintained (maybe...  is net distribution seasonal?  probably, which
+is an assumption that is violated in this scale up)
+
+
+Add data on coverage to the plot.
+
+
+Add hist, diagnostics for mu_household_size, s_household_size,
+household_size.
 
 
 Check if Poisson model of ownership is as good as more complicated
