@@ -696,21 +696,29 @@ def main(country_list=None):
 
         subplot(5, cols, 0*cols + 3)
         my_hist(s_m)
+        xticks([0., .02, .04, .06, .08, .1], ['0%', '2', '4', '6', '8', '10'], fontsize=small_fontsize)
+
 
         subplot(5, cols, 1*cols + 3)
         my_hist(s_d)
         my_hist(e_d)
+        xticks([0., .5, 1., 1.5, 2.], ['0%', '50', '100', '150', '200'], fontsize=small_fontsize)
 
         subplot(5, cols, 2*cols + 3)
         my_hist(p_l)
         my_hist(s_r)
+        xticks([0., .05, .1, .15, .2], ['0%', '5', '10', '15', '20'], fontsize=small_fontsize)
 
         subplot(5, cols, 3*cols + 3)
         my_hist(mu_household_size)
         my_hist(household_size)
+        xticks([])
+        xticks([3, 4, 5, 6], [3, 4, 5, 6], fontsize=small_fontsize)
 
         subplot(5, cols, 4*cols + 3)
         my_hist(s_household_size)
+        xticks([.15, .2, .25, .3, .35, .4], ['15%', '20', '25', '30', '35', '40'], fontsize=small_fontsize)
+        
 
         rows = 5
         subplot(rows, cols/2, 0*(cols/2)+1)
