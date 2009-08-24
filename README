@@ -8,9 +8,9 @@ what follows.
 To Do
 -----
 
-Decide if household stock csv should be included in the model (leaning
-towards no).  Change plot to show it at mean survey date, instead of
-at year change.
+Decide if household stock csv should be included in the model (Not
+included).  Change plot to show it at mean survey date, instead of at
+year change.
 
 
 Rescale nets distributed during partial year to estimate total nets
@@ -19,11 +19,8 @@ maintained (maybe...  is net distribution seasonal?  probably, which
 is an assumption that is violated in this scale up)
 
 
-Add data on coverage to the plot.
-
-
-Add hist, diagnostics for mu_household_size, s_household_size,
-household_size.
+Add data on coverage to the model.  From household surveys and also
+from WHO if it is available.
 
 
 Check if Poisson model of ownership is as good as more complicated
@@ -33,38 +30,11 @@ models.
 Check if # nets is correlated with household size.
 
 
-Include survey time (mean, standard deviation) as a covariate.
-Planned approach: round mean survey date to nearest year, and apply
-survey results to household stock for that year; include residual and
-standard dev as covariates in "random effect" i.e. to predict
-dispersion of the household stock measurement beyond sampling error.
-Fit the random effect covariate coefficients in empirical prior phase.
-
-
-Try making p_l a latent random variable with a "random effect" to
-control dispersion.
-
-
-Sparate compartments for itns and llins; llin model as is currently
-implemented, itn model with a retreatment probability, and only one
-compartment::
-
-
-  m  +---+  d  +------+ 1-r
----->| W |---->|  H1  |----->
-     +---+     +------+      
-                 ^   |        
-                 |   | r
-                 +---+
-
-
 Hold out 20% of the data and see how well model can predict it.
 
 
-Try alternative error models.
-
-
-Consider other relevant covariates, such as SES.
+Use MI to fill in ITN coverage in years not covered by surveys (better
+than adding more compartments)
 
 
 Compartmental Model
