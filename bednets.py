@@ -40,9 +40,9 @@ def load_csv(fname):
 def main(country_list=None):
     ### load all data from csv files
     manufacturing_data = load_csv('manuitns_forabie07072009.csv')
-    administrative_distribution_data = load_csv('total_admllins_forabie06082009.csv')
+    administrative_distribution_data = load_csv('updated_adminllins_forabie24082009.csv')
     household_stock_data = load_csv('stock_surveyitns_19082009.csv')
-    household_distribution_data = load_csv('updated_total_svyllins_forabie06082009.csv')
+    household_distribution_data = load_csv('Updated Survey LLIN distributions, 24082009.csv')
     retention_data = load_csv('retention07072009.csv')
     population_data = load_csv('population.csv')
     household_size_data = load_csv('numllins_owned_forabie18082009.csv')
@@ -410,24 +410,46 @@ def main(country_list=None):
 
 
 
-        ### observed household net stocks
-        household_stock_obs = []
-        for d in household_stock_data:
+#         ### observed household net stocks
+#         ### This stoch is redundant, since all household distribution flows are sufficient to reconstruct
+#         household_stock_obs = []
+#         for d in household_stock_data:
+#             if d['Country'] != c:
+#                 continue
+
+#             @observed
+#             @stochastic(name='household_stock_%s_%s' % (d['Country'], d['Survey_Year2']))
+#             def obs(value=float(d['SvyIndex_LLINstotal']),
+#                     year=int(d['Survey_Year2']),
+#                     std_err=float(d['SvyIndex_st']),
+#                     H=H):
+#                 return normal_like(value, H[year-year_start], 1. / std_err ** 2)
+#             household_stock_obs.append(obs)
+
+#         # vars += [household_stock_obs]
+
+
+        ### observed coverage 
+        coverage_obs = []
+        for d in household_size_data:
             if d['Country'] != c:
                 continue
 
+            d['coverage'] = 1. - float(d['Per_0LLINs'])
+            d['coverage_se'] = float(d['LLINs0_SE'])
+            mean_survey_date = time.strptime(d['Mean_SvyDate'], '%d-%b-%y')
+            d['Year'] = mean_survey_date[0] + mean_survey_date[1]/12.
+            
             @observed
-            @stochastic(name='household_stock_%s_%s' % (d['Country'], d['Survey_Year2']))
-            def obs(value=float(d['SvyIndex_LLINstotal']),
+            @stochastic(name='Coverage_%s_%s' % (d['Country'], d['Survey_Year2']))
+            def obs(value=d['coverage'],
                     year=int(d['Survey_Year2']),
-                    std_err=float(d['SvyIndex_st']),
-                    H=H):
-                return normal_like(value, H[year-year_start], 1. / std_err ** 2)
-            household_stock_obs.append(obs)
+                    std_err=float(d['coverage_se']),
+                    coverage=coverage):
+                return normal_like(value, coverage[year-year_start], 1. / std_err**2)
+            coverage_obs.append(obs)
 
-        ### This stoch is redundant, since all household distribution flows are sufficient to reconstruct
-        # vars += [household_stock_obs]
-
+        vars += [coverage_obs]
 
         ### observed net retention 
 
@@ -787,7 +809,7 @@ def main(country_list=None):
         subplot(rows, cols/2, 3*(cols/2)+1)
         title('nets in households', fontsize=fontsize)
         plot_fit(H)
-        for d in household_size_data:
+        for d in household_stock_data:
             mean_survey_date = time.strptime(d['Mean_SvyDate'], '%d-%b-%y')
             d['Year'] = mean_survey_date[0] + mean_survey_date[1]/12.
         scatter_data(household_stock_data, c, 'Country', 'SvyIndex_LLINstotal',
