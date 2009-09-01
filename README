@@ -39,12 +39,12 @@ l2[t] := number of 2-year-old nets lost or discarded during time period t
 
 The compartments are connected as follows:
 
-  m  +---+  d  +----+ 1-l1 +----+ 1-l2 +----+ 1
----->| W |---->| H1 |----->| H2 |----->| H3 |--->
-     +---+     +----+      +----+      +----+
-                  |         |
-                  | l1      | l2
-                  +---->    +---->
+  m  +---+  d  +----+ 1-l1 +----+ 1-l2 +----+ 1-l3 +----+ 1
+---->| W |---->| H1 |----->| H2 |----->| H3 |----->| H4 |--->
+     +---+     +----+      +----+      +----+      +----+
+                  |         |           |
+                  | l1      | l2        | l3
+                  +---->    +---->      +---->
 
 A quantity of interest that can be calculated from this model is the
 expected time it takes a net to reach a household.  Assuming the nets
@@ -56,7 +56,16 @@ But the primary quantity of interest in this investigation is the
 fraction of households with at least one net.  Assuming the number of
 nets in a household is Poisson, this is:
 
-coverage[t] = 1 - exp(-H[t] / population[t] * household_size)
+llin_coverage[t] = 1 - exp(-H[t] / population[t] * household_size)
+
+To also quickly incorporate information about non-LLIN ITNs, there is also a parameter for non-LLIN ITNs:
+
+H'[t] = number of non-LLIN ITNs in households at time t
+
+and the primary quantity of interest is then:
+
+itn_coverage[t] = 1. - exp(-H[t] + H'[t] / population * household_size)
+        
 
 
 Model parameters
@@ -68,15 +77,16 @@ m[t] := the number of nets manufactured during time period t (t = 0, ..., 9)
 W_0 := the number of nets in warehouses at time 0
 H_0 := the number of nets in households at time 0
 household_size 
-
+H'[t]
 
 Model Dynamics
 --------------
 
 W[t+1] = W[t] + m[t] - d[t];  W[0] = W_0
-H1[t+1] = d[t];  H1[0] = H_0/3
-H2[t+1] = H1[t] - l1[t];  H2[0] = H_0/3
-H3[t+1] = H2[t] - l2[t];  H3[0] = H_0/3
+H1[t+1] = d[t];  H1[0] = H_0
+H2[t+1] = H1[t] - l1[t];  H2[0] = 0
+H3[t+1] = H2[t] - l2[t];  H3[0] = 0
+H4[t+1] = H3[t] - l3[t];  H4[0] = 0
 l1[t] = H1[t] * p_l
 l2[t] = H2[t] * p_l
 
@@ -86,16 +96,16 @@ Assumptions in Dynamics
 
 The model dynamics make two major assumptions:
 
-1. Every 1-year-old and 2-year-old net is lost/discarded independently
+1. Every 1- to 3-year-old net is lost/discarded independently
    at random with the same probability during the year.
 
-2. Every 3-year-old net is discarded during the year.
+2. Every 4-year-old net is discarded during the year.
 
 
 Statistical Model
 -----------------
 
-There are 6 types of data that will drive parameter estimation:
+There are 7 types of data that will drive parameter estimation:
 
 Manufacturing Data - Information on the number of nets procured by
 each country for distribution;  initial model::
@@ -144,7 +154,12 @@ then household size for the country under consideration is modelled as
 a latent variable that is constant over time, drawn from the same distribution::
 
     household_size ~ N(mu_household_size, s_household_size^2)
-    
+
+
+llin and itn coverage data is also incorporated::
+
+    llin_coverage_i ~ llin_coverage[t_i] + N(0, s_{llin_coverage_i}^2)
+    itn_coverage_i ~ itn_coverage[t_i] + N(0, s_{itn_coverage_i}^2)
 
 Priors
 ------
@@ -171,6 +186,8 @@ W[t], H[t] >= 0
 
 mu_household_size ~ Gamma(1, 1/5)
 s_household_size ~ Gamma(20, 20/.05)
+
+H'[t] ~ Lognormal(log(1000), 10)
 
 
 Empirical Bayes Priors

@@ -34,31 +34,46 @@ def load_csv(fname):
     data = [d for d in csv_f]
     f.close()
 
+    # make sure all floats are floats
+    for d in data:
+        for k in d.keys():
+            try:
+                d[k] = float(d[k])
+            except ValueError:
+                pass
+
     return data
 
 
 def main(country_list=None):
     ### load all data from csv files
-    manufacturing_data = load_csv('manuitns_forabie07072009.csv')
-    administrative_distribution_data = load_csv('updated_adminllins_forabie24082009.csv')
-    household_stock_data = load_csv('stock_surveyitns_19082009.csv')
-    household_distribution_data = load_csv('Updated Survey LLIN distributions, 24082009.csv')
-    retention_data = load_csv('retention07072009.csv')
+    manufacturing_llin_data = load_csv('manuitns_forabie07072009.csv')
+    #manufacturing_llin_data = load_csv('blank_manu.csv')
+    administrative_llin_distribution_data = load_csv('updated_adminllins_forabie24082009.csv')
+    household_llin_stock_data = load_csv('stock_surveyitns_19082009.csv')
+    household_llin_distribution_data = load_csv('Updated Survey LLIN distributions, 24082009.csv')
+    household_itn_distribution_data = load_csv('survey_itn_dist.csv')
+    retention_llin_data = load_csv('retention07072009.csv')
+    coverage_llin_data = load_csv('numllins_owned_forabie18082009.csv')
+
+    coverage_itn_data = load_csv('numitns_owned_forabie31082009.csv')
+
+
     population_data = load_csv('population.csv')
-    household_size_data = load_csv('numllins_owned_forabie18082009.csv')
+    household_size_data = load_csv('numitns_owned_forabie31082009.csv')
 
 
     ### find parameters for simple model to predict administrative
     ### distribution data from household distribution data
     data_dict = {}
     # store admin data for each country-year
-    for d in administrative_distribution_data:
+    for d in administrative_llin_distribution_data:
         key = (d['Country'], d['Year'])
         if not data_dict.has_key(key):
             data_dict[key] = {}
         data_dict[key]['admin'] = float(d['Program_Llns'])
     # store household data for each country-year
-    for d in household_distribution_data:
+    for d in household_llin_distribution_data:
         key = (d['Country'], d['Year'])
         if not data_dict.has_key(key):
             data_dict[key] = {}
@@ -136,8 +151,8 @@ def main(country_list=None):
 
     axis([1000,exp(16),1000,exp(16)])
     legend()
-    ylabel('Nets distributed according to household survey')
-    xlabel('Nets distributed according to administrative data')
+    ylabel('LLINs distributed according to household survey')
+    xlabel('LLINs distributed according to administrative data')
     for k in data_dict:
         d = data_dict[k]
         text(d['admin'], d['survey'], ' %s, %s' % k, fontsize=12, alpha=.5, verticalalignment='center')
@@ -178,7 +193,7 @@ def main(country_list=None):
 
 
     ### pick the country of interest
-    country_set = set([d['Country'] for d in manufacturing_data])
+    country_set = set([d['Country'] for d in manufacturing_llin_data])
     print 'fitting models for %d countries...' % len(country_set)
 
     ### set years for estimation
@@ -197,9 +212,9 @@ def main(country_list=None):
                 population[int(d['Year']) - year_start] = float(d['Population'])
         
         ### find some descriptive statistics to use as priors
-        nd_all = [float(d['Program_Llns']) for d in administrative_distribution_data \
+        nd_all = [float(d['Program_Llns']) for d in administrative_llin_distribution_data \
                       if d['Country'] == c] \
-                      + [float(d['Total_LLINs']) for d in household_distribution_data \
+                      + [float(d['Total_LLINs']) for d in household_llin_distribution_data \
                              if d['Country'] == c and d['Year'] == d['Survey_Year2']]
         # if there is no distribution data, make some up
         if len(nd_all) == 0:
@@ -207,7 +222,7 @@ def main(country_list=None):
 
         nd_min = min(nd_all)
 
-        nm_all = [float(d['Manu_Itns']) for d in manufacturing_data if d['Country'] == c]
+        nm_all = [float(d['Manu_Itns']) for d in manufacturing_llin_data if d['Country'] == c]
         # if there is no manufacturing data, make some up
         if len(nm_all) == 0:
             nm_all = [ 1000. ]
@@ -236,21 +251,21 @@ def main(country_list=None):
         vars += [mu_household_size, s_household_size, tau_household_size, household_size]
         
 
-        s_r = Gamma('error in retention data', 20., 20./.15, value=.15)
-        s_m = Gamma('error in manufacturing data', 20., 20./.05, value=.05)
+        s_r = Gamma('error in llin retention data', 20., 20./.15, value=.15)
+        s_m = Gamma('error in llin manufacturing data', 20., 20./.05, value=.05)
         s_d = Normal('sampling error in admin dist data', prior_s_d.stats()['mean'], prior_s_d.stats()['standard deviation']**-2, value=.05)
         e_d = Normal('sys error in admin dist data', prior_e_d.stats()['mean'], prior_e_d.stats()['standard deviation']**-2, value=.05)
 
         vars += [s_r, s_m, s_d, e_d]
 
 
-        nd = Lognormal('nets distributed', mu=log(nd_min) * ones(year_end-year_start-1), tau=1.)
-        nm = Lognormal('nets manufactured', mu=log(nm_min) * ones(year_end-year_start-1), tau=1.)
+        nd = Lognormal('llins distributed', mu=log(nd_min) * ones(year_end-year_start-1), tau=1.)
+        nm = Lognormal('llins manufactured', mu=log(nm_min) * ones(year_end-year_start-1), tau=1.)
 
-        W_0 = Lognormal('initial warehouse net stock', mu=log(1000), tau=10., value=1000)
-        H_0 = Lognormal('initial household net stock', mu=log(1000), tau=10., value=1000)
+        W_0 = Lognormal('initial llin warehouse net stock', mu=log(1000), tau=10., value=1000)
+        H_0 = Lognormal('initial llin household net stock', mu=log(1000), tau=10., value=1000)
 
-        @deterministic(name='warehouse net stock')
+        @deterministic(name='llin warehouse net stock')
         def W(W_0=W_0, nm=nm, nd=nd):
             W = zeros(year_end-year_start)
             W[0] = W_0
@@ -265,39 +280,51 @@ def main(country_list=None):
                 T[t] = sum(maximum(0, nm[t] - maximum(0, cumsum(nd[t:]) - W[t]))[1:]) / nm[t]
             return T
 
-        @deterministic(name='1-year-old household net stock')
+        @deterministic(name='1-year-old household llin stock')
         def H1(H_0=H_0, nd=nd):
             H1 = zeros(year_end-year_start)
-            H1[0] = H_0/3.
+            H1[0] = H_0
             for t in range(year_end - year_start - 1):
                 H1[t+1] = nd[t]
             return H1
 
-        @deterministic(name='2-year-old household net stock')
+        @deterministic(name='2-year-old household llin stock')
         def H2(H_0=H_0, H1=H1, p_l=p_l):
             H2 = zeros(year_end-year_start)
-            H2[0] = H_0/3.
             for t in range(year_end - year_start - 1):
                 H2[t+1] = H1[t] * (1 - p_l)
             return H2
 
-        @deterministic(name='3-year-old household net stock')
+        @deterministic(name='3-year-old household llin stock')
         def H3(H_0=H_0, H2=H2, p_l=p_l):
             H3 = zeros(year_end-year_start)
-            H3[0] = H_0/3.
             for t in range(year_end - year_start - 1):
                 H3[t+1] = H2[t] * (1 - p_l)
             return H3
 
-        @deterministic(name='household net stock')
+        @deterministic(name='4-year-old household llin stock')
+        def H4(H_0=H_0, H3=H3, p_l=p_l):
+            H4 = zeros(year_end-year_start)
+            for t in range(year_end - year_start - 1):
+                H4[t+1] = H3[t] * (1 - p_l)
+            return H4
+
+        @deterministic(name='household llin stock')
         def H(H1=H1, H2=H2, H3=H3):
             return H1 + H2 + H3
 
-        @deterministic(name='coverage')
-        def coverage(H=H, population=population, household_size=household_size):
+        @deterministic(name='llin coverage')
+        def llin_coverage(H=H, population=population, household_size=household_size):
             return 1. - exp(-1. * H / population * household_size)
 
-        vars += [nd, nm, W_0, H_0, W, T, H, H1, H2, H3, coverage]
+        Hprime = Lognormal('non-llin household net stock', mu=log(1000)*ones(year_end-year_start), tau=10., value=1000*ones(year_end-year_start))
+
+        @deterministic(name='itn coverage')
+        def itn_coverage(H_llin=H, H_non_llin=Hprime, population=population, household_size=household_size):
+            return 1. - exp(-1. * (H_llin + H_non_llin) / population * household_size)
+        
+
+        vars += [nd, nm, W_0, H_0, W, T, H, H1, H2, H3, H4, llin_coverage, Hprime, itn_coverage]
 
 
         # set initial condition on W_0 to have no stockouts
@@ -318,6 +345,10 @@ def main(country_list=None):
             return normal_like(diff(log(maximum(H,1))), 0., 1. / (1.)**2)
 
         @potential
+        def smooth_Hprime(H=Hprime):
+            return normal_like(diff(log(maximum(H,1))), 0., 1. / (1.)**2)
+
+        @potential
         def T_near_1(T=T):
             return normal_like(T, ones(shape(T)), 1. / (1.)**2)
 
@@ -325,7 +356,7 @@ def main(country_list=None):
         def positive_stocks(H=H, W=W):
             return -1000 * (dot(H**2, H < 0) + dot(W**2, W < 0))
 
-        vars += [smooth_H, smooth_W, positive_stocks, T_near_1]
+        vars += [smooth_H, smooth_Hprime, smooth_W, positive_stocks, T_near_1]
 
 
            #####################
@@ -337,7 +368,7 @@ def main(country_list=None):
         ### observed nets manufactured
 
         manufacturing_obs = []
-        for d in manufacturing_data:
+        for d in manufacturing_llin_data:
             if d['Country'] != c:
                 continue
 
@@ -359,7 +390,7 @@ def main(country_list=None):
         ### observed nets distributed
 
         admin_distribution_obs = []
-        for d in administrative_distribution_data:
+        for d in administrative_llin_distribution_data:
             if d['Country'] != c:
                 continue
 
@@ -379,7 +410,7 @@ def main(country_list=None):
 
 
         household_distribution_obs = []
-        for d in household_distribution_data:
+        for d in household_llin_distribution_data:
             if d['Country'] != c:
                 continue
 
@@ -409,29 +440,9 @@ def main(country_list=None):
         vars += [household_distribution_obs]
 
 
-
-#         ### observed household net stocks
-#         ### This stoch is redundant, since all household distribution flows are sufficient to reconstruct
-#         household_stock_obs = []
-#         for d in household_stock_data:
-#             if d['Country'] != c:
-#                 continue
-
-#             @observed
-#             @stochastic(name='household_stock_%s_%s' % (d['Country'], d['Survey_Year2']))
-#             def obs(value=float(d['SvyIndex_LLINstotal']),
-#                     year=int(d['Survey_Year2']),
-#                     std_err=float(d['SvyIndex_st']),
-#                     H=H):
-#                 return normal_like(value, H[year-year_start], 1. / std_err ** 2)
-#             household_stock_obs.append(obs)
-
-#         # vars += [household_stock_obs]
-
-
         ### observed coverage 
         coverage_obs = []
-        for d in household_size_data:
+        for d in coverage_llin_data:
             if d['Country'] != c:
                 continue
 
@@ -441,12 +452,40 @@ def main(country_list=None):
             d['Year'] = mean_survey_date[0] + mean_survey_date[1]/12.
             
             @observed
-            @stochastic(name='Coverage_%s_%s' % (d['Country'], d['Survey_Year2']))
+            @stochastic(name='LLIN_Coverage_%s_%s' % (d['Country'], d['Survey_Year2']))
             def obs(value=d['coverage'],
-                    year=int(d['Survey_Year2']),
-                    std_err=float(d['coverage_se']),
-                    coverage=coverage):
-                return normal_like(value, coverage[year-year_start], 1. / std_err**2)
+                    year=d['Survey_Year2'],
+                    std_err=d['coverage_se'],
+                    coverage=llin_coverage):
+                year_part = year-floor(year)
+                coverage_i = year_part * coverage[floor(year)-year_start] + (1-year_part) * coverage[ceil(year)-year_start]
+                return normal_like(value, coverage_i, 1. / std_err**2)
+            coverage_obs.append(obs)
+
+        for d in coverage_itn_data:
+            if d['Country'] != c:
+                continue
+
+            d['coverage'] = 1. - float(d['Per_0ITNs'])
+
+            if d['noLLINs'] != 2: # data from survey
+                d['coverage_se'] = float(d['ITNs0_SE'])
+                mean_survey_date = time.strptime(d['Mean_SvyDate'], '%d-%b-%y')
+                d['Year'] = mean_survey_date[0] + mean_survey_date[1]/12.
+
+            else: # data from report
+                d['coverage_se'] = .01  # made up standard error
+                d['Year'] = d['Survey_Year1']
+            
+            @observed
+            @stochastic(name='ITN_Coverage_%s_%s' % (d['Country'], d['Year']))
+            def obs(value=d['coverage'],
+                    year=d['Year'],
+                    std_err=d['coverage_se'],
+                    coverage=itn_coverage):
+                year_part = year-floor(year)
+                coverage_i = year_part * coverage[floor(year)-year_start] + (1-year_part) * coverage[ceil(year)-year_start]
+                return normal_like(value, coverage_i, 1. / std_err**2)
             coverage_obs.append(obs)
 
         vars += [coverage_obs]
@@ -454,7 +493,7 @@ def main(country_list=None):
         ### observed net retention 
 
         retention_obs = []
-        for d in retention_data:
+        for d in retention_llin_data:
             @observed
             @stochastic(name='retention_%s_%s' % (d['Name'], d['Year']))
             def obs(value=float(d['Retention_Rate']),
@@ -470,6 +509,9 @@ def main(country_list=None):
 
         household_size_obs = []
         for d in household_size_data:
+            if d['noLLINs'] == 2: # data from report
+                continue
+            
             @observed
             @stochastic(name='household_size_%s_%s' % (d['Country'], d['Survey_Year2']))
             def obs(value=float(d['HHnum_Mean']), s_i=float(d['HHnum_SE']),
@@ -529,7 +571,7 @@ def main(country_list=None):
                         'LLINs Manufactured (Thousands)', 'LLINs Manufactured Lower CI', 'LLINs Manufactured Upper CI',
                         'LLINs Distributed (Thousands)', 'LLINs Distributed Lower CI', 'LLINs Distributed Upper CI',
                         'LLINs Owned (Thousands)', 'LLINs Owned Lower CI', 'LLINs Owned Upper CI',
-                        'Coverage (Percent)', 'Coverage Lower CI', 'Coverage Upper CI']
+                        'ITN Coverage (Percent)', 'ITN Coverage Lower CI', 'ITN Coverage Upper CI']
         if not settings.CSV_NAME in os.listdir(settings.PATH):
             f = open(settings.PATH + settings.CSV_NAME, 'a')
             f.write('%s\n' % ','.join(col_headings))
@@ -550,7 +592,7 @@ def main(country_list=None):
                 val = [nm.stats()['mean'][t]/1000] + list(nm.stats()['95% HPD interval'][t]/1000)
                 val += [nd.stats()['mean'][t]/1000] + list(nd.stats()['95% HPD interval'][t]/1000)
             val += [H.stats()['mean'][t]/1000] + list(H.stats()['95% HPD interval'][t]/1000)
-            val += [100*coverage.stats()['mean'][t]] + list(100*coverage.stats()['95% HPD interval'][t])
+            val += [100*itn_coverage.stats()['mean'][t]] + list(100*itn_coverage.stats()['95% HPD interval'][t])
             f.write(','.join(['%.2f']*(len(col_headings)-2)) % tuple(val))
             f.write('\n')
         f.close()
@@ -591,7 +633,7 @@ def main(country_list=None):
             fill(x, y, alpha=.95, label='Est 95% UI', facecolor='.8', alpha=.5)
 
         def scatter_data(data_list, country, country_key, data_key,
-                         error_key=None, error_val=None,  p_l=None, s_r=None,
+                         error_key=None, error_val=0.,  p_l=None, s_r=None,
                          fmt='go', scale=1.e6, label='', offset=0.):
             """ This convenience function is a little bit of a mess, but it
             avoids duplicating code for scatter-plotting various types of
@@ -605,13 +647,6 @@ def main(country_list=None):
             if error_key:
                 error_val = array([1.96*float(d[error_key]) \
                                        for d in data_list if d[country_key] == c])
-                #if s_r == None:
-                #    error_val = array([1.96*float(d[error_key]) \
-                #                           for d in data_list if d[country_key] == c])
-                #else:
-                #    error_val = array([1.96*float(d[error_key])
-                #                       * (1 + (int(d['Survey_Year']) - int(d['Year'])) * s_r) \
-                #                           for d in data_list if d[country_key] == c])
 
             elif error_val:
                 error_val = 1.96 * error_val * data_val
@@ -747,13 +782,8 @@ def main(country_list=None):
         title('nets manufactured', fontsize=fontsize)
         plot_fit(nm, style='steps')
         if len(manufacturing_obs) > 0:
-            try:
-                scatter_data(manufacturing_data, c, 'Country', 'Manu_Itns',
-                             error_val=1.96 * s_m.stats()['mean'], offset=.5)
-            except Exception, e:
-                print 'Error: ', e
-                scatter_data(manufacturing_data, c, 'Country', 'Manu_Itns',
-                             error_val=1.96 * s_m.value, offset=.5)
+            scatter_data(manufacturing_llin_data, c, 'Country', 'Manu_Itns',
+                         error_val=1.96 * s_m.stats()['mean'], offset=.5)
         decorate_figure(ymax=stoch_max(nm)/1.e6)
 
         subplot(rows, cols/2, 1*(cols/2)+1)
@@ -766,53 +796,41 @@ def main(country_list=None):
         plot_fit(nd, style='steps')
         if len(admin_distribution_obs) > 0:
             label = 'Administrative Data'
-            try:
-                scatter_data(administrative_distribution_data, c, 'Country', 'Program_Llns',
-                             error_val=1.96 * s_d.stats()['mean'], label=label, offset=.5)
-            except Exception, e:
-                print 'Error: ', e
-                scatter_data(administrative_distribution_data, c, 'Country', 'Program_Llns',
-                             error_val=1.96 * s_m.value, label=label, offset=.5)
+            scatter_data(administrative_llin_distribution_data, c, 'Country', 'Program_Llns',
+                         error_val=1.96 * s_d.stats()['mean'], label=label, offset=.5)
         if len(household_distribution_obs) > 0:
             label = 'Survey Data'
-            try:
-                scatter_data(household_distribution_data, c, 'Country', 'Total_LLINs',
-                             error_key='Total_st', fmt='bs',
-                             p_l=p_l.stats()['mean'][0], s_r=s_r.stats()['mean'],
-                             label=label, offset=.5)
-            except Exception, e:
-                print 'Error: ', e
-                scatter_data(household_distribution_data, c, 'Country', 'Total_LLINs',
-                             error_key='Total_st', fmt='bs',
-                             p_l=p_l.value, s_r=s_r.value,
-                             label=label, offset=.5)
+            scatter_data(household_llin_distribution_data, c, 'Country', 'Total_LLINs',
+                         error_key='Total_st', fmt='bs',
+                         p_l=p_l.stats()['mean'][0], s_r=s_r.stats()['mean'],
+                         label=label, offset=.5)
         legend(loc='upper left')
         decorate_figure(ymax=stoch_max(nd)/1.e6)
 
         subplot(rows, cols/2, 4*(cols/2)+1)
-        title(str(coverage), fontsize=fontsize)
-        plot_fit(coverage, scale=.01)
-        if max(coverage.stats()['mean']) > .1:
+        title(str(itn_coverage), fontsize=fontsize)
+        plot_fit(itn_coverage, scale=.01)
+        if max(itn_coverage.stats()['mean']) > .1:
             hlines([80], 1999, 2009, linestyle='dotted', color='blue', alpha=.5)
 
         # calculate coverage from fraction of households with zero llins
-        for d in household_size_data:
+        for d in coverage_llin_data:
             d['coverage'] = 1. - float(d['Per_0LLINs'])
             mean_survey_date = time.strptime(d['Mean_SvyDate'], '%d-%b-%y')
             d['Year'] = mean_survey_date[0] + mean_survey_date[1]/12.
-        scatter_data(household_size_data, c, 'Country', 'coverage', 'LLINs0_SE',
+        scatter_data(coverage_llin_data, c, 'Country', 'coverage', 'LLINs0_SE',
                      fmt='bs', scale=.01)
+        scatter_data(coverage_itn_data, c, 'Country', 'coverage',
+                     fmt='r^', scale=.01)
         decorate_figure(ystr='At least one net (%)')
-        #l,r,b,t = axis()
-        #axis([l, r, 0, 5])
 
         subplot(rows, cols/2, 3*(cols/2)+1)
         title('nets in households', fontsize=fontsize)
         plot_fit(H)
-        for d in household_stock_data:
+        for d in household_llin_stock_data:
             mean_survey_date = time.strptime(d['Mean_SvyDate'], '%d-%b-%y')
             d['Year'] = mean_survey_date[0] + mean_survey_date[1]/12.
-        scatter_data(household_stock_data, c, 'Country', 'SvyIndex_LLINstotal',
+        scatter_data(household_llin_stock_data, c, 'Country', 'SvyIndex_LLINstotal',
                      error_key='SvyIndex_st', fmt='bs')
         decorate_figure(ymax=stoch_max(H)/1.e6)
 
