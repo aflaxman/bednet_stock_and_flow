@@ -189,7 +189,7 @@ def main(country_list=None):
     axis([-10,10,-.2,1.2])
     yticks([0,1])
 
-    savefig(settings.PATH + 'bednets_Priors_%s.png' % time.strftime('%Y_%m_%d_%H_%M'))
+    savefig(settings.PATH + 'bednets__Priors_%s.png' % time.strftime('%Y_%m_%d_%H_%M'))
 
 
     ### pick the country of interest
@@ -317,7 +317,7 @@ def main(country_list=None):
         def llin_coverage(H=H, population=population, household_size=household_size):
             return 1. - exp(-1. * H / population * household_size)
 
-        Hprime = Lognormal('non-llin household net stock', mu=log(1000)*ones(year_end-year_start), tau=10., value=1000*ones(year_end-year_start))
+        Hprime = Lognormal('non-llin household net stock', mu=log(1000)*ones(year_end-year_start), tau=1., value=1000*ones(year_end-year_start))
 
         @deterministic(name='itn coverage')
         def itn_coverage(H_llin=H, H_non_llin=Hprime, population=population, household_size=household_size):
@@ -474,7 +474,7 @@ def main(country_list=None):
                 d['Year'] = mean_survey_date[0] + mean_survey_date[1]/12.
 
             else: # data from report
-                d['coverage_se'] = .01  # made up standard error
+                d['coverage_se'] = .005  # made up standard error
                 d['Year'] = d['Survey_Year1']
             
             @observed
@@ -505,7 +505,7 @@ def main(country_list=None):
         vars += [retention_obs]
 
 
-        ### observed net retention 
+        ### observed household size
 
         household_size_obs = []
         for d in household_size_data:
@@ -542,7 +542,7 @@ def main(country_list=None):
                 print '%s: %s' % (str(stoch), str(stoch.value))
 
             mc = MCMC(vars, verbose=1)
-            mc.use_step_method(AdaptiveMetropolis, [nd, nm, p_l, s_r], verbose=0)
+            mc.use_step_method(AdaptiveMetropolis, [nd, nm, Hprime, p_l, s_r], verbose=0)
             #mc.use_step_method(AdaptiveMetropolis, nd, verbose=0)
             #mc.use_step_method(AdaptiveMetropolis, nm, verbose=0)
 
