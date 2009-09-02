@@ -205,6 +205,8 @@ def main(country_list=None):
         if not c_id in country_list:
             continue
 
+        print c
+
         # get population data for this country, to calculate LLINs per capita
         population = zeros(year_end - year_start)
         for d in population_data:
@@ -320,7 +322,7 @@ def main(country_list=None):
             return 1. - exp(-1. * H / population * household_size)
 
         mu_h_prime = .001 * population
-        Hprime = Lognormal('non-llin household net stock', mu=log(mu_h_prime), tau=1., value=1000*ones(year_end-year_start))
+        Hprime = Lognormal('non-llin household net stock', mu=log(mu_h_prime), tau=1.)
 
         @deterministic(name='itn coverage')
         def itn_coverage(H_llin=H, H_non_llin=Hprime, population=population, household_size=household_size):
@@ -349,11 +351,15 @@ def main(country_list=None):
 
         @potential
         def smooth_Hprime(H=Hprime):
-            return normal_like(diff(log(maximum(H,1))), 0., 1. / (.025)**2)
+            return normal_like(diff(log(maximum(H,1))), 0., 1. / (.25)**2)
 
         @potential
         def T_near_1(T=T):
             return normal_like(T, ones(shape(T)), 1. / (1.)**2)
+
+        @potential
+        def smooth_T(T=T):
+            return normal_like(diff(T,1), 0., 1. / (.1)**2)
 
         @potential
         def positive_stocks(H=H, W=W):
