@@ -56,7 +56,7 @@ def main(country_list=None):
     retention_llin_data = load_csv('retention07072009.csv')
     coverage_llin_data = load_csv('numllins_owned_forabie18082009.csv')
 
-    coverage_itn_data = load_csv('numitns_owned_forabie31082009.csv')
+    coverage_itn_data = load_csv('numitns_owned_forabie02092009.csv')
 
 
     population_data = load_csv('population.csv')
@@ -365,7 +365,7 @@ def main(country_list=None):
         def positive_stocks(H=H, W=W):
             return -1000 * (dot(H**2, H < 0) + dot(W**2, W < 0))
 
-        vars += [smooth_H, smooth_Hprime, smooth_W, positive_stocks, T_near_1]
+        vars += [smooth_H, smooth_Hprime, smooth_W, smooth_T, positive_stocks, T_near_1]
 
 
            #####################
@@ -467,7 +467,7 @@ def main(country_list=None):
                     std_err=d['coverage_se'],
                     coverage=llin_coverage):
                 year_part = year-floor(year)
-                coverage_i = year_part * coverage[floor(year)-year_start] + (1-year_part) * coverage[ceil(year)-year_start]
+                coverage_i = (1-year_part) * coverage[floor(year)-year_start] + year_part * coverage[ceil(year)-year_start]
                 return normal_like(value, coverage_i, 1. / std_err**2)
             coverage_obs.append(obs)
 
@@ -493,7 +493,7 @@ def main(country_list=None):
                     std_err=d['coverage_se'],
                     coverage=itn_coverage):
                 year_part = year-floor(year)
-                coverage_i = year_part * coverage[floor(year)-year_start] + (1-year_part) * coverage[ceil(year)-year_start]
+                coverage_i = (1-year_part) * coverage[floor(year)-year_start] + year_part * coverage[ceil(year)-year_start]
                 return normal_like(value, coverage_i, 1. / std_err**2)
             coverage_obs.append(obs)
 
