@@ -112,7 +112,7 @@ def main(country_list=None):
         thin = 1
         burn = 0
     else:
-        iter = 1000
+        iter = settings.NUM_SAMPLES
         thin = 200
         burn = 20000
 
@@ -258,9 +258,11 @@ def main(country_list=None):
 
         vars += [s_r, s_m, s_d, e_d]
 
+        mu_nd = .001 * population
+        nd = Lognormal('llins distributed', mu=log(mu_nd), tau=1.)
 
-        nd = Lognormal('llins distributed', mu=log(nd_min) * ones(year_end-year_start-1), tau=1.)
-        nm = Lognormal('llins manufactured', mu=log(nm_min) * ones(year_end-year_start-1), tau=1.)
+        mu_nm = .001 * population
+        nm = Lognormal('llins manufactured', mu=log(mu_nd), tau=1.)
 
         W_0 = Lognormal('initial llin warehouse net stock', mu=log(1000), tau=10., value=1000)
         H_0 = Lognormal('initial llin household net stock', mu=log(1000), tau=10., value=1000)
@@ -310,14 +312,15 @@ def main(country_list=None):
             return H4
 
         @deterministic(name='household llin stock')
-        def H(H1=H1, H2=H2, H3=H3):
-            return H1 + H2 + H3
+        def H(H1=H1, H2=H2, H3=H3, H4=H4):
+            return H1 + H2 + H3 + H4
 
         @deterministic(name='llin coverage')
         def llin_coverage(H=H, population=population, household_size=household_size):
             return 1. - exp(-1. * H / population * household_size)
 
-        Hprime = Lognormal('non-llin household net stock', mu=log(1000)*ones(year_end-year_start), tau=1., value=1000*ones(year_end-year_start))
+        mu_h_prime = .001 * population
+        Hprime = Lognormal('non-llin household net stock', mu=log(mu_h_prime), tau=1., value=1000*ones(year_end-year_start))
 
         @deterministic(name='itn coverage')
         def itn_coverage(H_llin=H, H_non_llin=Hprime, population=population, household_size=household_size):
@@ -346,7 +349,7 @@ def main(country_list=None):
 
         @potential
         def smooth_Hprime(H=Hprime):
-            return normal_like(diff(log(maximum(H,1))), 0., 1. / (1.)**2)
+            return normal_like(diff(log(maximum(H,1))), 0., 1. / (.025)**2)
 
         @potential
         def T_near_1(T=T):
@@ -552,7 +555,7 @@ def main(country_list=None):
                     thin = 1
                     burn = 0
                 else:
-                    iter = 1000
+                    iter = settings.NUM_SAMPLES
                     thin = 1000
                     burn = 250000
                 mc.sample(iter*thin+burn, burn, thin)
@@ -608,7 +611,7 @@ def main(country_list=None):
         def plot_fit(f, scale=1.e6, style='lines'):
             """ Plot the posterior mean and 95% UI
             """
-            if style=='lines':
+            if style=='lines' or style=='alt lines':
                 x = year_start + arange(len(f.value))
                 y = f.stats()['mean']/scale
                 lb = f.stats()['quantiles'][2.5]/scale
@@ -625,12 +628,17 @@ def main(country_list=None):
                 x = array(x[1:] + [ii+1]) + year_start
             else:
                 raise ValueError, 'unrecognized style option: %s' % str(style)
-                
-            plot(x, y, 'k-', linewidth=2, label='Est Mean')
 
-            x = np.concatenate((x, x[::-1]))
-            y = np.concatenate((lb, ub[::-1]))
-            fill(x, y, alpha=.95, label='Est 95% UI', facecolor='.8', alpha=.5)
+            if style=='alt lines':
+                plot(x, y, 'b:', alpha=.75)
+                plot(x, lb, 'b:', alpha=.75)
+                plot(x, ub, 'b:', alpha=.75)
+            else:
+                plot(x, y, 'k-', linewidth=2, label='Est Mean')
+
+                x = np.concatenate((x, x[::-1]))
+                y = np.concatenate((lb, ub[::-1]))
+                fill(x, y, alpha=.95, label='Est 95% UI', facecolor='.8', alpha=.5)
 
         def scatter_data(data_list, country, country_key, data_key,
                          error_key=None, error_val=0.,  p_l=None, s_r=None,
@@ -666,7 +674,7 @@ def main(country_list=None):
             vlines(range(year_start,year_end), 0, t, color=(0,0,0), alpha=.3)
             axis([year_start, year_end-1, 0, t])
             ylabel(ystr, fontsize=fontsize)
-            xticks([2001, 2003, 2005, 2007], ['2001', '2003', '2005', '2007'], fontsize=fontsize)
+            xticks([1999.5, 2001.5, 2003.5, 2005.5, 2007.5], ['1999', '2001', '2003', '2005', '2007'], fontsize=fontsize)
 
         def my_hist(stoch):
             """ Plot a histogram of the posterior distribution of a stoch"""
@@ -810,6 +818,7 @@ def main(country_list=None):
         subplot(rows, cols/2, 4*(cols/2)+1)
         title(str(itn_coverage), fontsize=fontsize)
         plot_fit(itn_coverage, scale=.01)
+        plot_fit(llin_coverage, scale=.01, style='alt lines')
         if max(itn_coverage.stats()['mean']) > .1:
             hlines([80], 1999, 2009, linestyle='dotted', color='blue', alpha=.5)
 

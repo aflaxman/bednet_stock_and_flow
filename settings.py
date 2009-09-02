@@ -8,6 +8,10 @@ CSV_NAME = 'output.csv'
 # set TESTING to True to speed up all calculations (and make them much less accurate)
 TESTING = False
 
+# Use 1000 samples for final uncertainty estimates;  100 will be enough for refining model/priors
+#NUM_SAMPLES = 100
+NUM_SAMPLES = 1000
+
 # matplotlib backend setup
 import matplotlib
 matplotlib.use("AGG") 

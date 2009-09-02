@@ -171,8 +171,8 @@ s_m ~ Gamma(20, 20/.05)
 s_d ~ Normal with mean and standard from empirical Bayes approach (described below)
 e_d ~ Normal with mean and standard from empirical Bayes approach (described below) 
 
-d[t] ~ Lognormal(log(min_i(d_i)), 1)
-m[t] ~ Lognormal(log(min_i(m_i)), 1)
+d[t] ~ Lognormal(log(.001*population), 1)
+m[t] ~ Lognormal(log(.001*population), 1)
 
 W_0 ~ Lognormal(log(1000), 10)
 H_0 ~ Lognormal(log(1000), 10)
@@ -187,7 +187,7 @@ W[t], H[t] >= 0
 mu_household_size ~ Gamma(1, 1/5)
 s_household_size ~ Gamma(20, 20/.05)
 
-H'[t] ~ Lognormal(log(1000), 10)
+H'[t] ~ Lognormal(log(.001*population), .25^2)
 
 
 Empirical Bayes Priors
