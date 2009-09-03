@@ -484,7 +484,7 @@ def main(country_list=None):
 
             else: # data from report
                 d['coverage_se'] = .005  # made up standard error
-                d['Year'] = d['Survey_Year1']
+                d['Year'] = d['Survey_Year1'] + .5
             
             @observed
             @stochastic(name='ITN_Coverage_%s_%s' % (d['Country'], d['Year']))
@@ -562,7 +562,7 @@ def main(country_list=None):
                     burn = 0
                 else:
                     iter = settings.NUM_SAMPLES
-                    thin = 1000
+                    thin = settings.THIN
                     burn = 250000
                 mc.sample(iter*thin+burn, burn, thin)
             except:
@@ -835,7 +835,7 @@ def main(country_list=None):
             d['Year'] = mean_survey_date[0] + mean_survey_date[1]/12.
         scatter_data(coverage_llin_data, c, 'Country', 'coverage', 'LLINs0_SE',
                      fmt='bs', scale=.01)
-        scatter_data(coverage_itn_data, c, 'Country', 'coverage',
+        scatter_data(coverage_itn_data, c, 'Country', 'coverage', 'coverage_se',
                      fmt='r^', scale=.01)
         decorate_figure(ystr='At least one net (%)')
 
