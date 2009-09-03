@@ -198,7 +198,7 @@ def main(country_list=None):
 
     ### set years for estimation
     year_start = 1999
-    year_end = 2010
+    year_end = 2011
 
     for c_id, c in enumerate(sorted(country_set)):
         # hacky way to run only a subset of countries, for parallelizing on the cluster
@@ -212,7 +212,11 @@ def main(country_list=None):
         for d in population_data:
             if d['Country'] == c:
                 population[int(d['Year']) - year_start] = float(d['Population'])
-        
+        # since we might be predicting into the future, fill in population with last existing value
+        for ii in range(1, year_end-year_start):
+            if population[ii] == 0.:
+                population[ii] = population[ii-1]
+                
         ### find some descriptive statistics to use as priors
         nd_all = [float(d['Program_Llns']) for d in administrative_llin_distribution_data \
                       if d['Country'] == c] \

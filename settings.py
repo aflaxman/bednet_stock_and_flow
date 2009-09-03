@@ -9,8 +9,8 @@ CSV_NAME = 'output.csv'
 TESTING = False
 
 # Use 1000 samples for final uncertainty estimates;  100 will be enough for refining model/priors
-#NUM_SAMPLES = 100
-NUM_SAMPLES = 2000
+NUM_SAMPLES = 100
+#NUM_SAMPLES = 2000
 THIN = 2500
 
 # matplotlib backend setup
