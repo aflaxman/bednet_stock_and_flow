@@ -363,13 +363,17 @@ def main(country_list=None):
 
         @potential
         def smooth_T(T=T):
-            return normal_like(diff(T,1), 0., 1. / (.1)**2)
+            return normal_like(diff(T), 0., 1. / (.1)**2)
+
+        @potential
+        def smooth_nd(nd=nd):
+            return normal_like(diff(log(maximum(nd,1))), 0., 1. / (.25)**2)
 
         @potential
         def positive_stocks(H=H, W=W):
             return -1000 * (dot(H**2, H < 0) + dot(W**2, W < 0))
 
-        vars += [smooth_H, smooth_Hprime, smooth_W, smooth_T, positive_stocks, T_near_1]
+        vars += [smooth_H, smooth_Hprime, smooth_W, smooth_T, smooth_nd, positive_stocks, T_near_1]
 
 
            #####################
