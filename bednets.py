@@ -491,7 +491,7 @@ def main(country_list=None):
                 d['Year'] = mean_survey_date[0] + mean_survey_date[1]/12.
 
             else: # data from report
-                d['coverage_se'] = .005  # made up standard error
+                d['coverage_se'] = .05  # made up standard error
                 d['Year'] = d['Survey_Year1'] + .5
             
             @observed

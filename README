@@ -1,25 +1,17 @@
 Introduction
 ------------
 
-To be written: Malaria, Bednets, Coverage, Data Sources, Outline of
-what follows.
-
-
-To Do
------
-
-Check if Poisson model of ownership is as good as more complicated
-models.
-
-
-Check if # nets is correlated with household size.
-
-
-Hold out 20% of the data and see how well model can predict it.
-
-
-Use MI to fill in ITN coverage in years not covered by surveys (better
-than adding more compartments)
+Malaria remains significant cause of morbidity and mortality,
+particularly in children and in Africa.  A key strategy for reducing
+the burden of malaria has been the mass distribution of Insecticide
+Treated Nets (ITNs) and particularly Long Lasting Insecticide Treated
+Nets (LLINs).  Roll Back Malaria has set a target goal of having at
+least one ITN per household in 80% of households in malaria endemic
+regions by 2010.  There are limited sources of data to monitor the
+coverage scale-up: periodic but infrequent household surveys,
+manufacturing/administrative data about total number of nets not
+coverage, small scale studies of particular additional quantities of
+interest, for example net retention over time.
 
 
 Compartmental Model
@@ -206,6 +198,21 @@ survey data as "truth":
 To complete this model, we use uninformative hyper-priors on e_d and s_d:
     s_d ~ Gamma(1., 1./.05)
     e_d ~ Normal(0., 1./.5**2)
+
+
+
+
+To Do
+-----
+
+Check if Poisson model of ownership is as good as more complicated
+models.
+
+
+Check if # nets is correlated with household size.
+
+
+Hold out 20% of the data and see how well model can predict it.
 
 
 
