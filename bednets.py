@@ -59,7 +59,7 @@ def main(country_list=None):
     coverage_itn_data = load_csv('numitns_owned_forabie02092009.csv')
 
 
-    population_data = load_csv('population.csv')
+    population_data = load_csv('highburden_pop03092009.csv')
     household_size_data = load_csv('numitns_owned_forabie31082009.csv')
 
 
@@ -193,7 +193,7 @@ def main(country_list=None):
 
 
     ### pick the country of interest
-    country_set = set([d['Country'] for d in manufacturing_llin_data])
+    country_set = set([d['Country'] for d in population_data])
     print 'fitting models for %d countries...' % len(country_set)
 
     ### set years for estimation
@@ -211,7 +211,7 @@ def main(country_list=None):
         population = zeros(year_end - year_start)
         for d in population_data:
             if d['Country'] == c:
-                population[int(d['Year']) - year_start] = float(d['Population'])
+                population[int(d['Year']) - year_start] = d['Population']*1000
         # since we might be predicting into the future, fill in population with last existing value
         for ii in range(1, year_end-year_start):
             if population[ii] == 0.:
@@ -270,8 +270,8 @@ def main(country_list=None):
         mu_nm = .001 * population
         nm = Lognormal('llins manufactured', mu=log(mu_nd), tau=1.)
 
-        W_0 = Lognormal('initial llin warehouse net stock', mu=log(1000), tau=10., value=1000)
-        H_0 = Lognormal('initial llin household net stock', mu=log(1000), tau=10., value=1000)
+        W_0 = Lognormal('initial llin warehouse net stock', mu=log(.0001 * population[0]), tau=11.1, value=.0001*population[0])
+        H_0 = Lognormal('initial llin household net stock', mu=log(.0001 * population[0]), tau=11.1, value=.0001*population[0])
 
         @deterministic(name='llin warehouse net stock')
         def W(W_0=W_0, nm=nm, nd=nd):
@@ -551,7 +551,7 @@ def main(country_list=None):
         if method == 'MCMC':
             map = MAP(vars)
             if settings.TESTING:
-                map.fit(method='fmin', iterlim=1, verbose=1)
+                map.fit(method='fmin', iterlim=100, verbose=1)
             else:
                 map.fit(method='fmin_powell', verbose=1)
 
@@ -565,7 +565,7 @@ def main(country_list=None):
 
             try:
                 if settings.TESTING:
-                    iter = 10
+                    iter = 100
                     thin = 1
                     burn = 0
                 else:
@@ -587,17 +587,23 @@ def main(country_list=None):
         col_headings = ['Country', 'Year',
                         'LLINs Manufactured (Thousands)', 'LLINs Manufactured Lower CI', 'LLINs Manufactured Upper CI',
                         'LLINs Distributed (Thousands)', 'LLINs Distributed Lower CI', 'LLINs Distributed Upper CI',
+                        'LLINs in Warehouse (Thousands)', 'LLINs in Warehouse Lower CI', 'LLINs in Warehouse Upper CI',
                         'LLINs Owned (Thousands)', 'LLINs Owned Lower CI', 'LLINs Owned Upper CI',
+                        'non-LLIN ITNs Owned (Thousands)', 'non-LLIN ITNs Owned Lower CI', 'non-LLIN ITNs Owned Upper CI',
+                        'LLIN Coverage (Percent)', 'LLIN Coverage Lower CI', 'LLIN Coverage Upper CI',
                         'ITN Coverage (Percent)', 'ITN Coverage Lower CI', 'ITN Coverage Upper CI']
+        
+        try:  # sleep for a random time interval to avoid collisions when writing results
+            print 'sleeping...'
+            time.sleep(random.random()*30)
+            print '...woke up'
+        except:  # but let user cancel with cntl-C if there is a rush
+            print '...work up early'
+
         if not settings.CSV_NAME in os.listdir(settings.PATH):
             f = open(settings.PATH + settings.CSV_NAME, 'a')
             f.write('%s\n' % ','.join(col_headings))
         else:
-            # sleep for a random time interval to avoid collisions when writing results
-            try:
-                time.sleep(random.random()*30)
-            except:
-                pass
             f = open(settings.PATH + settings.CSV_NAME, 'a')
 
         for t in range(year_end - year_start):
@@ -608,7 +614,10 @@ def main(country_list=None):
             else:
                 val = [nm.stats()['mean'][t]/1000] + list(nm.stats()['95% HPD interval'][t]/1000)
                 val += [nd.stats()['mean'][t]/1000] + list(nd.stats()['95% HPD interval'][t]/1000)
+            val += [W.stats()['mean'][t]/1000] + list(W.stats()['95% HPD interval'][t]/1000)
             val += [H.stats()['mean'][t]/1000] + list(H.stats()['95% HPD interval'][t]/1000)
+            val += [Hprime.stats()['mean'][t]/1000] + list(Hprime.stats()['95% HPD interval'][t]/1000)
+            val += [100*llin_coverage.stats()['mean'][t]] + list(100*llin_coverage.stats()['95% HPD interval'][t])
             val += [100*itn_coverage.stats()['mean'][t]] + list(100*itn_coverage.stats()['95% HPD interval'][t])
             f.write(','.join(['%.2f']*(len(col_headings)-2)) % tuple(val))
             f.write('\n')

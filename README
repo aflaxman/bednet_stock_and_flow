@@ -166,8 +166,8 @@ e_d ~ Normal with mean and standard from empirical Bayes approach (described bel
 d[t] ~ Lognormal(log(.001*population), 1)
 m[t] ~ Lognormal(log(.001*population), 1)
 
-W_0 ~ Lognormal(log(1000), 10)
-H_0 ~ Lognormal(log(1000), 10)
+W_0 ~ Lognormal(log(.0001*population[0]), 11.)
+H_0 ~ Lognormal(log(.0001*population[0]), 11.)
 
 log(W[t+1]/W[t]) ~ Normal(0, 1^2)
 log(H[t+1]/H[t]) ~ Normal(0, 1^2)
