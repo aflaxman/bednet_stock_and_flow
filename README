@@ -169,19 +169,20 @@ m[t] ~ Lognormal(log(.001*population), 1)
 W_0 ~ Lognormal(log(.0001*population[0]), 11.)
 H_0 ~ Lognormal(log(.0001*population[0]), 11.)
 
-log(W[t+1]/W[t]) ~ Normal(0, 1^2)
-log(H[t+1]/H[t]) ~ Normal(0, 1^2)
-log(nd[t+1]/nd[t]) ~ Normal(0, .25^2)
-
-T[t] ~ Normal(1, 1^2)
-T[t+1]-T[t] ~ Normal(1, .1^2)
-
-W[t], H[t] >= 0
+H'[t] ~ Lognormal(log(.001*population), .25^2)
 
 mu_household_size ~ Gamma(1, 1/5)
 s_household_size ~ Gamma(20, 20/.05)
 
-H'[t] ~ Lognormal(log(.001*population), .25^2)
+log(W[t+1]/W[t]) ~ Normal(0, 1^2)
+log(H[t+1]/H[t]) ~ Normal(0, 1^2)
+log(H'[t+1]/H'[t]) ~ Normal(0, .5^2)
+log(nd[t+1]/nd[t]) ~ Normal(0, 1.^2)
+
+log(nd[t] / max_{t' < t} nd[t'])^- ~ Normal(0, .1^2)
+
+W[t], H[t] >= 0
+
 
 
 Empirical Bayes Priors
@@ -204,13 +205,6 @@ To complete this model, we use uninformative hyper-priors on e_d and s_d:
 
 To Do
 -----
-
-Check if Poisson model of ownership is as good as more complicated
-models.
-
-
-Check if # nets is correlated with household size.
-
 
 Hold out 20% of the data and see how well model can predict it.
 
