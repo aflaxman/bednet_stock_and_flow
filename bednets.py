@@ -224,7 +224,7 @@ def main(country_list=None):
             if population[ii] == 0.:
                 population[ii] = population[ii-1]
                 
-        ### find some descriptive statistics to use as priors
+        ### find some descriptive statistics to use as initial conditions
         nd_all = [float(d['Program_Llns']) for d in administrative_llin_distribution_data \
                       if d['Country'] == c] \
                       + [float(d['Total_LLINs']) for d in household_llin_distribution_data \
@@ -271,8 +271,9 @@ def main(country_list=None):
         e_d = Normal('sys error in admin dist data', prior_e_d.stats()['mean'], prior_e_d.stats()['standard deviation']**-2, value=prior_e_d.stats()['mean'])
         #e_d = Normal('sys error in admin dist data', 0., 1/.01**2, value=0.)
         #s_d = Gamma('sampling error in admin dist data', 20., 20./.05, value=.05)
-        
-        vars += [s_r, s_m, s_d, e_d]
+
+        s_dd = Gamma('recall adjustment in survey dist data', 20., 20/.01, value=.01)
+        vars += [s_r, s_m, s_d, e_d, s_dd]
 
         mu_nd = .001 * population
         nd = Lognormal('llins distributed', mu=log(mu_nd), tau=1., value=mu_nd)
@@ -331,23 +332,20 @@ def main(country_list=None):
         def H(H1=H1, H2=H2, H3=H3, H4=H4):
             return H1 + H2 + H3 + H4
 
-        zero_inflation_factor = Beta('zero inflation factor', 1., 1000.)
-
         @deterministic(name='llin coverage')
         def llin_coverage(H=H, population=population,
-                          household_size=household_size, zif=zero_inflation_factor):
-            return 1. - zif - (1-zif) * exp(-1. * H * household_size / (population * (1-zif)))
+                          household_size=household_size):
+            return 1. - exp(-1. * H * household_size / population)
 
         mu_h_prime = .001 * population
         Hprime = Lognormal('non-llin household net stock', mu=log(mu_h_prime), tau=1.)
 
         @deterministic(name='itn coverage')
-        def itn_coverage(H_llin=H, H_non_llin=Hprime, population=population, household_size=household_size, zif=zero_inflation_factor):
-            return 1. - zif - (1-zif) * exp(-1. * (H_llin + H_non_llin) * household_size / (population * (1-zif)))
+        def itn_coverage(H_llin=H, H_non_llin=Hprime, population=population,
+                         household_size=household_size):
+            return 1. - exp(-1. * (H_llin + H_non_llin) * household_size / population)
 
-        
-
-        vars += [nd, nm, W_0, H_0, W, T, H, H1, H2, H3, H4, llin_coverage, Hprime, itn_coverage, zero_inflation_factor]
+        vars += [nd, nm, W_0, H_0, W, T, H, H1, H2, H3, H4, llin_coverage, Hprime, itn_coverage]
 
 
         # set initial condition on W_0 to have no stockouts
@@ -457,7 +455,7 @@ def main(country_list=None):
             d2_i = float(d['Total_LLINs'])
             estimate_year = int(d['Year'])
             survey_year = int(d['Survey_Year2'])
-            s_d2_i = float(d['Total_st']) * 3. # design factor of 3 accounts for recall bias
+            s_d2_i = float(d['Total_st'])
             @observed
             @stochastic(name='household_distribution_%s_%s' % (d['Country'], d['Year']))
             def obs(value=d2_i,
@@ -465,11 +463,11 @@ def main(country_list=None):
                     survey_year=survey_year,
                     survey_err=s_d2_i,
                     retention_err=s_r,
-                    nd=nd, p_l=p_l):
+                    nd=nd, p_l=p_l, s_dd=s_dd):
                 return normal_like(
                     value,
                     nd[estimate_year - year_start] * (1 - p_l) ** (survey_year - estimate_year - .5),
-                    1./ survey_err**2)
+                    1./ (survey_err*(1+s_dd))**2)
             household_distribution_obs.append(obs)
 
             # also take this opportinuty to set better initial values for the MCMC
@@ -804,7 +802,7 @@ def main(country_list=None):
                  bbox={'facecolor': 'black', 'alpha': 1},
                   color='white', verticalalignment='center', horizontalalignment='right')
 
-        stochs_to_plot = [s_m, s_d, e_d, p_l, s_r, nm, nd, W, H, T, household_size, mu_household_size, zero_inflation_factor]
+        stochs_to_plot = [s_m, s_d, e_d, p_l, s_r, nm, nd, W, H, T, household_size, mu_household_size, s_dd]
 
         cols = 4
         rows = len(stochs_to_plot)
