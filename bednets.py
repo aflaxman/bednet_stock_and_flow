@@ -265,7 +265,8 @@ def main(country_list=None):
         
 
         s_r = Gamma('error in llin retention data', 20., 20./.15, value=.15)
-        s_m = Gamma('error in llin manufacturing data', 20., 20./.05, value=.05)
+        #s_m = Gamma('error in llin manufacturing data', 20., 20./.05, value=.05)
+        s_m = Gamma('error in llin manufacturing data', .153, 2.62, value=.05)
 
         s_d = Normal('sampling error in admin dist data', prior_s_d.stats()['mean'], prior_s_d.stats()['standard deviation']**-2, value=prior_s_d.stats()['mean'])
         e_d = Normal('sys error in admin dist data', prior_e_d.stats()['mean'], prior_e_d.stats()['standard deviation']**-2, value=prior_e_d.stats()['mean'])
@@ -532,7 +533,7 @@ def main(country_list=None):
                 d['Year'] = mean_survey_date[0] + mean_survey_date[1]/12.
 
             else: # data from report
-                d['coverage_se'] = .025  # made up standard error
+                d['coverage_se'] = .01  # made up standard error
                 d['Year'] = d['Survey_Year1'] + .5
             
             @observed
