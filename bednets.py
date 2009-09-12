@@ -38,7 +38,7 @@ def load_csv(fname):
     for d in data:
         for k in d.keys():
             try:
-                d[k] = float(d[k])
+                d[k] = float(d[k].replace(',',''))
             except ValueError:
                 pass
 
@@ -47,19 +47,19 @@ def load_csv(fname):
 
 def main(country_list=None):
     ### load all data from csv files
-    manufacturing_llin_data = load_csv('manuitns_forabie08092009.csv')
-    administrative_llin_distribution_data = load_csv('updated_adminllins_itns_forabie08092009.csv')
+    manufacturing_llin_data = load_csv('manuitns.csv')
+    administrative_llin_distribution_data = load_csv('adminllins_itns.csv')
 
-    household_llin_stock_data = load_csv('stock_llinsforabie_09092009.csv')
-    household_llin_distribution_data = load_csv('Updated Survey LLIN distributions, 24082009.csv')
+    household_llin_stock_data = load_csv('stock_llins.csv')
+    household_llin_distribution_data = load_csv('flow_llins.csv')
 
-    retention_llin_data = load_csv('retention07072009.csv')
+    retention_llin_data = load_csv('reten.csv')
 
-    coverage_llin_data = load_csv('numllins_owned_forabie08092009.csv')
-    coverage_itn_data = load_csv('numitns_owned_forabie08092009.csv')
+    coverage_llin_data = load_csv('llincc.csv')
+    coverage_itn_data = load_csv('itncc.csv')
 
-    population_data = load_csv('highburden_pop03092009.csv')
-    household_size_data = load_csv('numitns_owned_forabie31082009.csv')
+    population_data = load_csv('pop.csv')
+    household_size_data = load_csv('itncc.csv')
 
 
     ### find parameters for simple model to predict administrative
@@ -70,7 +70,7 @@ def main(country_list=None):
         key = (d['Country'], d['Year'])
         if not data_dict.has_key(key):
             data_dict[key] = {}
-        data_dict[key]['admin'] = float(d['Program_Llns'])
+        data_dict[key]['admin'] = float(d['Program_LLINs'])
     # store household data for each country-year
     for d in household_llin_distribution_data:
         key = (d['Country'], d['Year'])
@@ -218,14 +218,14 @@ def main(country_list=None):
         population = zeros(year_end - year_start)
         for d in population_data:
             if d['Country'] == c:
-                population[int(d['Year']) - year_start] = d['Population']*1000
+                population[int(d['Year']) - year_start] = d['Pop']*1000
         # since we might be predicting into the future, fill in population with last existing value
         for ii in range(1, year_end-year_start):
             if population[ii] == 0.:
                 population[ii] = population[ii-1]
                 
         ### find some descriptive statistics to use as initial conditions
-        nd_all = [float(d['Program_Llns']) for d in administrative_llin_distribution_data \
+        nd_all = [d['Program_LLINs'] for d in administrative_llin_distribution_data \
                       if d['Country'] == c] \
                       + [float(d['Total_LLINs']) for d in household_llin_distribution_data \
                              if d['Country'] == c and d['Year'] == d['Survey_Year2']]
@@ -249,32 +249,40 @@ def main(country_list=None):
          ###
         #######################
 
-        logit_p_l = Normal('logit(Pr[net is lost])', mu=logit(.05), tau=1., value=logit(.05))
-        p_l = InvLogit('Pr[net is lost]', logit_p_l)
-
-        vars += [logit_p_l, p_l]
+        logit_pi = Normal('logit(Pr[net is lost])', mu=logit(.05), tau=1., value=logit(.05))
+        pi = InvLogit('Pr[net is lost]', logit_pi)
+        vars += [logit_pi, pi]
         
         
-        mu_household_size = Gamma('regional average household size', 1., 1./5., value=5.)
-        s_household_size = Gamma('regional average household size se', 20, 20/.05, value=.05)
-        @deterministic(name='regional average household size precision')
-        def tau_household_size(se=s_household_size):
-            return 1. / se**2
-        household_size = Normal('country household size', mu_household_size, tau_household_size, value=5.)
-        vars += [mu_household_size, s_household_size, tau_household_size, household_size]
+        eta = Normal('coverage factor', mu=5., tau=1., value=5.)
+        vars += [eta]
         
 
         s_r = Gamma('error in llin retention data', 20., 20./.15, value=.15)
-        #s_m = Gamma('error in llin manufacturing data', 20., 20./.05, value=.05)
-        s_m = Gamma('error in llin manufacturing data', .153, 2.62, value=.05)
+
+        log_s_m = Uninformative('log(error in llin manu)', value=log(.05))
+        @deterministic(name='error in llin manufacturing data')
+        def s_m(log_s_m=log_s_m):
+            return exp(log_s_m) + .0001
+        @potential
+        def s_m_potential(s_m=s_m):
+            return gamma_like(s_m, 1., 20.)
+        vars += [log_s_m, s_m, s_m_potential]
 
         s_d = Normal('sampling error in admin dist data', prior_s_d.stats()['mean'], prior_s_d.stats()['standard deviation']**-2, value=prior_s_d.stats()['mean'])
         e_d = Normal('sys error in admin dist data', prior_e_d.stats()['mean'], prior_e_d.stats()['standard deviation']**-2, value=prior_e_d.stats()['mean'])
         #e_d = Normal('sys error in admin dist data', 0., 1/.01**2, value=0.)
         #s_d = Gamma('sampling error in admin dist data', 20., 20./.05, value=.05)
+        vars += [s_r, s_d, e_d]
 
-        s_dd = Gamma('recall adjustment in survey dist data', 20., 20/.01, value=.01)
-        vars += [s_r, s_m, s_d, e_d, s_dd]
+        log_s_rb = Uninformative('log(recall bias)', value=log(.05))
+        @deterministic(name='recall bias design factor')
+        def s_rb(log_s_rb=log_s_rb):
+            return exp(log_s_rb) + .0001
+        @potential
+        def s_rb_potential(s_rb=s_rb):
+            return gamma_like(s_rb, 1., 20.)
+        vars += [log_s_rb, s_rb, s_rb_potential]
 
         mu_nd = .001 * population
         nd = Lognormal('llins distributed', mu=log(mu_nd), tau=1., value=mu_nd)
@@ -309,24 +317,24 @@ def main(country_list=None):
             return H1
 
         @deterministic(name='2-year-old household llin stock')
-        def H2(H_0=H_0, H1=H1, p_l=p_l):
+        def H2(H_0=H_0, H1=H1, pi=pi):
             H2 = zeros(year_end-year_start)
             for t in range(year_end - year_start - 1):
-                H2[t+1] = H1[t] * (1 - p_l)
+                H2[t+1] = H1[t] * (1 - pi)
             return H2
 
         @deterministic(name='3-year-old household llin stock')
-        def H3(H_0=H_0, H2=H2, p_l=p_l):
+        def H3(H_0=H_0, H2=H2, pi=pi):
             H3 = zeros(year_end-year_start)
             for t in range(year_end - year_start - 1):
-                H3[t+1] = H2[t] * (1 - p_l)
+                H3[t+1] = H2[t] * (1 - pi)
             return H3
 
         @deterministic(name='4-year-old household llin stock')
-        def H4(H_0=H_0, H3=H3, p_l=p_l):
+        def H4(H_0=H_0, H3=H3, pi=pi):
             H4 = zeros(year_end-year_start)
             for t in range(year_end - year_start - 1):
-                H4[t+1] = H3[t] * (1 - p_l)
+                H4[t+1] = H3[t] * (1 - pi)
             return H4
 
         @deterministic(name='household llin stock')
@@ -335,16 +343,16 @@ def main(country_list=None):
 
         @deterministic(name='llin coverage')
         def llin_coverage(H=H, population=population,
-                          household_size=household_size):
-            return 1. - exp(-1. * H * household_size / population)
+                          eta=eta):
+            return 1. - exp(-eta * H / population)
 
         mu_h_prime = .001 * population
         Hprime = Lognormal('non-llin household net stock', mu=log(mu_h_prime), tau=1.)
 
         @deterministic(name='itn coverage')
         def itn_coverage(H_llin=H, H_non_llin=Hprime, population=population,
-                         household_size=household_size):
-            return 1. - exp(-1. * (H_llin + H_non_llin) * household_size / population)
+                         eta=eta):
+            return 1. - exp(-eta * (H_llin + H_non_llin) / population)
 
         vars += [nd, nm, W_0, H_0, W, T, H, H1, H2, H3, H4, llin_coverage, Hprime, itn_coverage]
 
@@ -435,14 +443,14 @@ def main(country_list=None):
 
             @observed
             @stochastic(name='administrative_distribution_%s_%s' % (d['Country'], d['Year']))
-            def obs(value=float(d['Program_Llns']), year=int(d['Year']),
+            def obs(value=d['Program_LLINs'], year=int(d['Year']),
                     nd=nd, s_d=s_d, e_d=e_d):
                 return normal_like(log(value), e_d + log(max(1., nd[year - year_start])), 1. / s_d**2)
             admin_distribution_obs.append(obs)
 
             # also take this opportinuty to set better initial values for the MCMC
             cur_val = copy.copy(nd.value)
-            cur_val[int(d['Year']) - year_start] = float(d['Program_Llns'])
+            cur_val[int(d['Year']) - year_start] = d['Program_LLINs']
             nd.value = cur_val
 
         vars += [admin_distribution_obs]
@@ -464,16 +472,16 @@ def main(country_list=None):
                     survey_year=survey_year,
                     survey_err=s_d2_i,
                     retention_err=s_r,
-                    nd=nd, p_l=p_l, s_dd=s_dd):
+                    nd=nd, pi=pi, s_rb=s_rb):
                 return normal_like(
                     value,
-                    nd[estimate_year - year_start] * (1 - p_l) ** (survey_year - estimate_year - .5),
-                    1./ (survey_err*(1+s_dd))**2)
+                    nd[estimate_year - year_start] * (1 - pi) ** (survey_year - estimate_year - .5),
+                    1./ (survey_err*(1+s_rb))**2)
             household_distribution_obs.append(obs)
 
             # also take this opportinuty to set better initial values for the MCMC
             cur_val = copy.copy(nd.value)
-            cur_val[estimate_year - year_start] = d2_i / (1 - p_l.value)**(survey_year - estimate_year - .5)
+            cur_val[estimate_year - year_start] = d2_i / (1 - pi.value)**(survey_year - estimate_year - .5)
             nd.value = cur_val
 
         vars += [household_distribution_obs]
@@ -551,7 +559,7 @@ def main(country_list=None):
             # also take this opportinuty to set better initial values for the MCMC
             t = floor(d['Year'])-year_start
             cur_val = copy.copy(Hprime.value)
-            cur_val[t] = max(.0001*population[t], log(1-d['coverage']) * population[t] / household_size.value - H.value[t])
+            cur_val[t] = max(.0001*population[t], log(1-d['coverage']) * population[t] / eta.value - H.value[t])
             Hprime.value = cur_val
 
         vars += [coverage_obs]
@@ -564,28 +572,12 @@ def main(country_list=None):
             @stochastic(name='retention_%s_%s' % (d['Name'], d['Year']))
             def obs(value=float(d['Retention_Rate']),
                     T_i=float(d['Follow_up_Time']),
-                    p_l=p_l, s_r=s_r):
-                return normal_like(value, (1. - p_l) ** T_i, 1. / s_r**2)
+                    pi=pi, s_r=s_r):
+                return normal_like(value, (1. - pi) ** T_i, 1. / s_r**2)
             retention_obs.append(obs)
 
         vars += [retention_obs]
 
-
-        ### observed household size
-
-        household_size_obs = []
-        for d in household_size_data:
-            if d['noLLINs'] == 2: # data from report
-                continue
-            
-            @observed
-            @stochastic(name='household_size_%s_%s' % (d['Country'], d['Survey_Year2']))
-            def obs(value=float(d['HHnum_Mean']), s_i=float(d['HHnum_SE']),
-                    mu=mu_household_size, s_od=s_household_size):
-                return normal_like(value, mu, 1. / (s_od**2 + s_i**2))
-            household_size_obs.append(obs)
-
-        vars += [household_size_obs]
 
 
            #################
@@ -595,20 +587,21 @@ def main(country_list=None):
         print 'running fit for net model in %s...' % c
 
         method = 'MCMC'
-        #method = 'NormApprox'
+        method = 'NormApprox'
 
         if method == 'MCMC':
             map = MAP(vars)
             if settings.TESTING:
                 map.fit(method='fmin', iterlim=100, verbose=1)
             else:
-                map.fit(method='fmin_powell', verbose=1)
+                map.fit(method='fmin', iterlim=100, verbose=1)
+                #map.fit(method='fmin_powell', verbose=1)
 
-            for stoch in [s_r, s_m, s_d, e_d, p_l, T]:
+            for stoch in [s_r, s_m, s_d, e_d, pi, T]:
                 print '%s: %s' % (str(stoch), str(stoch.value))
 
             mc = MCMC(vars, verbose=1)
-            mc.use_step_method(AdaptiveMetropolis, [nd, nm, Hprime, p_l, s_r], verbose=0)
+            mc.use_step_method(AdaptiveMetropolis, [nd, nm, Hprime, pi, s_r], verbose=0)
             #mc.use_step_method(AdaptiveMetropolis, nd, verbose=0)
             #mc.use_step_method(AdaptiveMetropolis, nm, verbose=0)
 
@@ -628,7 +621,7 @@ def main(country_list=None):
         elif method == 'NormApprox':
             na = NormApprox(vars)
             na.fit(method='fmin_powell', tol=.00001, verbose=1)
-            for stoch in [s_r, s_m, s_d, e_d, p_l]:
+            for stoch in [s_r, s_m, s_d, e_d, pi]:
                 print '%s: %s' % (str(stoch), str(stoch.value))
             na.sample(1000)
 
@@ -713,7 +706,7 @@ def main(country_list=None):
                 fill(x, y, alpha=.95, label='Est 95% UI', facecolor='.8', alpha=.5)
 
         def scatter_data(data_list, country, country_key, data_key,
-                         error_key=None, error_val=0.,  p_l=None, s_r=None,
+                         error_key=None, error_val=0.,  pi=None, s_r=None,
                          fmt='go', scale=1.e6, label='', offset=0.):
             """ This convenience function is a little bit of a mess, but it
             avoids duplicating code for scatter-plotting various types of
@@ -803,7 +796,7 @@ def main(country_list=None):
                  bbox={'facecolor': 'black', 'alpha': 1},
                   color='white', verticalalignment='center', horizontalalignment='right')
 
-        stochs_to_plot = [s_m, s_d, e_d, p_l, s_r, nm, nd, W, H, T, household_size, mu_household_size, s_dd]
+        stochs_to_plot = [s_m, s_d, e_d, pi, s_r, nm, nd, W, H, T, eta, eta, s_rb]
 
         cols = 4
         rows = len(stochs_to_plot)
@@ -842,18 +835,17 @@ def main(country_list=None):
         xticks([0., .5, 1., 1.5, 2.], ['0%', '50', '100', '150', '200'], fontsize=small_fontsize)
 
         subplot(5, cols, 2*cols + 3)
-        my_hist(p_l)
+        my_hist(pi)
         my_hist(s_r)
         xticks([0., .05, .1, .15, .2], ['0%', '5', '10', '15', '20'], fontsize=small_fontsize)
 
         subplot(5, cols, 3*cols + 3)
-        my_hist(mu_household_size)
-        my_hist(household_size)
+        my_hist(eta)
         xticks([])
         xticks([3, 4, 5, 6], [3, 4, 5, 6], fontsize=small_fontsize)
 
         subplot(5, cols, 4*cols + 3)
-        my_hist(s_household_size)
+        my_hist(s_rb)
         xticks([.15, .2, .25, .3, .35, .4], ['15%', '20', '25', '30', '35', '40'], fontsize=small_fontsize)
         
 
@@ -876,13 +868,13 @@ def main(country_list=None):
         plot_fit(nd, style='steps')
         if len(admin_distribution_obs) > 0:
             label = 'Administrative Data'
-            scatter_data(administrative_llin_distribution_data, c, 'Country', 'Program_Llns',
+            scatter_data(administrative_llin_distribution_data, c, 'Country', 'Program_LLINs',
                          error_val=1.96 * s_d.stats()['mean'], label=label, offset=.5)
         if len(household_distribution_obs) > 0:
             label = 'Survey Data'
             scatter_data(household_llin_distribution_data, c, 'Country', 'Total_LLINs',
                          error_key='Total_st', fmt='bs',
-                         p_l=p_l.stats()['mean'][0], s_r=s_r.stats()['mean'],
+                         pi=pi.stats()['mean'][0], s_r=s_r.stats()['mean'],
                          label=label, offset=.5)
         legend(loc='upper left')
         decorate_figure(ymax=stoch_max(nd)/1.e6)
