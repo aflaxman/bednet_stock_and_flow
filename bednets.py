@@ -236,7 +236,7 @@ def main(country_list=None):
         zeta = Beta('zero inflation factor', 10., 1000., value=.01)
         vars += [eta, zeta]
         
-        s_m = Lognormal('error in llin manu', log(.05), .5**-2, value=.05)
+        s_m = Lognormal('error in llin manu', log(.05), .1**-2, value=.05)
         vars += [s_m]
 
         s_r_c = Lognormal('error in admin coverage data', log(.01), .1**-2, value=.01)
