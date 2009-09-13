@@ -46,6 +46,9 @@ def load_csv(fname):
 
 
 def main(country_list=None):
+    ### setup the canvas for our plots
+    figure(**settings.FIGURE_OPTIONS)
+
     ### load all data from csv files
     manufacturing_llin_data = load_csv('manuitns.csv')
     administrative_llin_distribution_data = load_csv('adminllins_itns.csv')
@@ -62,142 +65,133 @@ def main(country_list=None):
     household_size_data = load_csv('itncc.csv')
 
 
-    ### find parameters for simple model to predict administrative
-    ### distribution data from household distribution data
-    data_dict = {}
-    # store admin data for each country-year
-    for d in administrative_llin_distribution_data:
-        key = (d['Country'], d['Year'])
-        if not data_dict.has_key(key):
-            data_dict[key] = {}
-        data_dict[key]['admin'] = float(d['Program_LLINs'])
-    # store household data for each country-year
-    for d in household_llin_distribution_data:
-        key = (d['Country'], d['Year'])
-        if not data_dict.has_key(key):
-            data_dict[key] = {}
-        data_dict[key]['survey'] = float(d['Total_LLINs'])
-        data_dict[key]['time'] =  float(d['Survey_Year2'])-float(d['Year'])
-        data_dict[key]['survey_ste'] = float(d['Total_st'])
-    # keep only country-years with both admin and survey data
-    for key in data_dict.keys():
-        if len(data_dict[key]) != 4:
-            data_dict.pop(key)
+#     ### find parameters for simple model to predict administrative
+#     ### distribution data from household distribution data
+#     data_dict = {}
+#     # store admin data for each country-year
+#     for d in administrative_llin_distribution_data:
+#         key = (d['Country'], d['Year'])
+#         if not data_dict.has_key(key):
+#             data_dict[key] = {}
+#         data_dict[key]['admin'] = float(d['Program_LLINs'])
+#     # store household data for each country-year
+#     for d in household_llin_distribution_data:
+#         key = (d['Country'], d['Year'])
+#         if not data_dict.has_key(key):
+#             data_dict[key] = {}
+#         data_dict[key]['survey'] = float(d['Total_LLINs'])
+#         data_dict[key]['time'] =  float(d['Survey_Year2'])-float(d['Year'])
+#         data_dict[key]['survey_ste'] = float(d['Total_st'])
+#     # keep only country-years with both admin and survey data
+#     for key in data_dict.keys():
+#         if len(data_dict[key]) != 4:
+#             data_dict.pop(key)
 
-    x = array([data_dict[k]['admin'] for k in sorted(data_dict.keys())])
-    y = array([data_dict[k]['survey'] for k in sorted(data_dict.keys())])
-    y_e = array([data_dict[k]['survey_ste'] for k in sorted(data_dict.keys())])
-
-
-    prior_s_d = Gamma('prior on sampling error in admin dist data', 1., 1./.05, value=.05)
-    prior_e_d = Normal('prior on sys error in admin dist data', 0., 1./.5**2, value=0.)
-    prior_vars = [prior_s_d, prior_e_d]
-
-    for k in data_dict:
-        @observed
-        @stochastic
-        def net_distribution_data(value=data_dict[k]['admin'], survey_value=data_dict[k]['survey'],
-                              s_d=prior_s_d, e_d=prior_e_d):
-            return normal_like(log(value), log(survey_value) + e_d, 1. / s_d**2)
-        prior_vars.append(net_distribution_data)
+#     x = array([data_dict[k]['admin'] for k in sorted(data_dict.keys())])
+#     y = array([data_dict[k]['survey'] for k in sorted(data_dict.keys())])
+#     y_e = array([data_dict[k]['survey_ste'] for k in sorted(data_dict.keys())])
 
 
-    # sample from empirical prior distribution via MCMC
-    mc = MCMC(prior_vars, verbose=1)
-    mc.use_step_method(AdaptiveMetropolis, [prior_s_d, prior_e_d])
+#     prior_s_d = Gamma('prior on sampling error in admin dist data', 1., 1./.05, value=.05)
+#     prior_e_d = Normal('prior on sys error in admin dist data', 0., 1./.5**2, value=0.)
+#     prior_vars = [prior_s_d, prior_e_d]
 
-    if settings.TESTING:
-        iter = 100
-        thin = 1
-        burn = 0
-    else:
-        iter = settings.NUM_SAMPLES
-        thin = 200
-        burn = 20000
-
-    mc.sample(iter*thin+burn, burn, thin)
+#     for k in data_dict:
+#         @observed
+#         @stochastic
+#         def net_distribution_data(value=data_dict[k]['admin'], survey_value=data_dict[k]['survey'],
+#                               s_d=prior_s_d, e_d=prior_e_d):
+#             return normal_like(log(value), log(survey_value) + e_d, 1. / s_d**2)
+#         prior_vars.append(net_distribution_data)
 
 
-    # output information on empirical prior distribution
-    print str(prior_s_d), prior_s_d.stats()
-    print str(prior_e_d), prior_e_d.stats()
+#     # sample from empirical prior distribution via MCMC
+#     mc = MCMC(prior_vars, verbose=1)
+#     mc.use_step_method(AdaptiveMetropolis, [prior_s_d, prior_e_d])
 
-    mean_e_d = prior_e_d.stats()['mean']
+#     if settings.TESTING:
+#         iter = 100
+#         thin = 1
+#         burn = 0
+#     else:
+#         iter = settings.NUM_SAMPLES
+#         thin = 200
+#         burn = 20000
 
-    y_predicted = exp(arange(log(1000), 16, .1))
-    x_predicted = (1 + mean_e_d) * y_predicted
-    x_predicted = maximum(10, x_predicted)
-
-    ### setup the canvas for our plots
-    figure(**settings.FIGURE_OPTIONS)
-
-    clf()
-    subplot(1,2,1)
-    #errorbar(x, y, 1.96*y_e, fmt=',', alpha=.9, linewidth=1.5)
-    plot(x_predicted, y_predicted, 'r:', alpha=.75, linewidth=2, label='predicted value')
-    loglog([1000,exp(16)],[1000,exp(16)], 'k--', alpha=.5, linewidth=2, label='y=x')
-
-    y = np.concatenate((y_predicted, y_predicted[::-1]))
-    x = np.concatenate(((1 + mean_e_d - 1.96*prior_e_d.stats()['standard deviation']) * y_predicted,
-                       ((1 + mean_e_d + 1.96*prior_e_d.stats()['standard deviation']) * y_predicted)[::-1]))
-    x = maximum(10, x)
-    fill(x, y, alpha=.95, label='Sys Err 95% UI', facecolor=(.8,.4,.4), alpha=.5)
-
-    x = np.concatenate(((1 + mean_e_d - 1.96*prior_e_d.stats()['standard deviation']) * y_predicted * (1 - 1.96*prior_s_d.stats()['mean']),
-                       ((1 + mean_e_d + 1.96*prior_e_d.stats()['standard deviation']) * y_predicted * (1 + 1.96*prior_s_d.stats()['mean']))[::-1]))
-    x = maximum(10, x)
-    fill(x, y, alpha=.95, label='Total Err 95% UI', facecolor='.8', alpha=.5)
-
-    axis([1000,exp(16),1000,exp(16)])
-    legend()
-    ylabel('LLINs distributed according to household survey')
-    xlabel('LLINs distributed according to administrative data')
-    for k in data_dict:
-        d = data_dict[k]
-        text(d['admin'], d['survey'], ' %s, %s' % k, fontsize=12, alpha=.5, verticalalignment='center')
-
-    subplot(2,4,3)
-    hist(prior_e_d.trace(), normed=True, log=False)
-    l,r,b,t = axis()
-    vlines(ravel(prior_e_d.stats()['quantiles'].values()), b, t,
-           linewidth=2, alpha=.75, linestyle='dashed',
-           color=['k', 'k', 'r', 'k', 'k'])
-    yticks([])
-    title(str(prior_e_d), fontsize=12)
-
-    subplot(2,4,4)
-    hist(prior_s_d.trace(), normed=True, log=False)
-    l,r,b,t = axis()
-    vlines(ravel(prior_s_d.stats()['quantiles'].values()), b, t,
-           linewidth=2, alpha=.75, linestyle='dashed',
-           color=['k', 'k', 'r', 'k', 'k'])
-    yticks([])
-    title(str(prior_s_d), fontsize=12)
-
-    subplot(2,4,7)
-    plot(prior_e_d.trace())
-    plot(prior_s_d.trace())
-    legend()
-    title('MCMC trace')
-
-    subplot(2,4,8)
-    acorr(prior_e_d.trace() - mean(prior_e_d.trace()), maxlags=10, normed=True)
-    acorr(prior_s_d.trace() - mean(prior_s_d.trace()), maxlags=10, normed=True)
-    legend()
-    title('MCMC autocorrelation')
-    axis([-10,10,-.2,1.2])
-    yticks([0,1])
-
-    #savefig(settings.PATH + 'bednets__Priors_%s.png' % time.strftime('%Y_%m_%d_%H_%M'))
+#     mc.sample(iter*thin+burn, burn, thin)
 
 
-    # replace data with blanks for validation runs here:
-    #manufacturing_llin_data = load_csv('blank_manu.csv')
-    #household_llin_stock_data = load_csv('blank_stocks.csv')
-    #household_llin_distribution_data = load_csv('blank_survey_llins.csv')
-    #coverage_llin_data = load_csv('blank_numllins.csv')
-    #coverage_itn_data = load_csv('blank_numitns.csv')
+#     # output information on empirical prior distribution
+#     print str(prior_s_d), prior_s_d.stats()
+#     print str(prior_e_d), prior_e_d.stats()
 
+#     mean_e_d = prior_e_d.stats()['mean']
+
+#     y_predicted = exp(arange(log(1000), 16, .1))
+#     x_predicted = (1 + mean_e_d) * y_predicted
+#     x_predicted = maximum(10, x_predicted)
+
+#     ### setup the canvas for our plots
+#     figure(**settings.FIGURE_OPTIONS)
+
+#     clf()
+#     subplot(1,2,1)
+#     #errorbar(x, y, 1.96*y_e, fmt=',', alpha=.9, linewidth=1.5)
+#     plot(x_predicted, y_predicted, 'r:', alpha=.75, linewidth=2, label='predicted value')
+#     loglog([1000,exp(16)],[1000,exp(16)], 'k--', alpha=.5, linewidth=2, label='y=x')
+
+#     y = np.concatenate((y_predicted, y_predicted[::-1]))
+#     x = np.concatenate(((1 + mean_e_d - 1.96*prior_e_d.stats()['standard deviation']) * y_predicted,
+#                        ((1 + mean_e_d + 1.96*prior_e_d.stats()['standard deviation']) * y_predicted)[::-1]))
+#     x = maximum(10, x)
+#     fill(x, y, alpha=.95, label='Sys Err 95% UI', facecolor=(.8,.4,.4), alpha=.5)
+
+#     x = np.concatenate(((1 + mean_e_d - 1.96*prior_e_d.stats()['standard deviation']) * y_predicted * (1 - 1.96*prior_s_d.stats()['mean']),
+#                        ((1 + mean_e_d + 1.96*prior_e_d.stats()['standard deviation']) * y_predicted * (1 + 1.96*prior_s_d.stats()['mean']))[::-1]))
+#     x = maximum(10, x)
+#     fill(x, y, alpha=.95, label='Total Err 95% UI', facecolor='.8', alpha=.5)
+
+#     axis([1000,exp(16),1000,exp(16)])
+#     legend()
+#     ylabel('LLINs distributed according to household survey')
+#     xlabel('LLINs distributed according to administrative data')
+#     for k in data_dict:
+#         d = data_dict[k]
+#         text(d['admin'], d['survey'], ' %s, %s' % k, fontsize=12, alpha=.5, verticalalignment='center')
+
+#     subplot(2,4,3)
+#     hist(prior_e_d.trace(), normed=True, log=False)
+#     l,r,b,t = axis()
+#     vlines(ravel(prior_e_d.stats()['quantiles'].values()), b, t,
+#            linewidth=2, alpha=.75, linestyle='dashed',
+#            color=['k', 'k', 'r', 'k', 'k'])
+#     yticks([])
+#     title(str(prior_e_d), fontsize=12)
+
+#     subplot(2,4,4)
+#     hist(prior_s_d.trace(), normed=True, log=False)
+#     l,r,b,t = axis()
+#     vlines(ravel(prior_s_d.stats()['quantiles'].values()), b, t,
+#            linewidth=2, alpha=.75, linestyle='dashed',
+#            color=['k', 'k', 'r', 'k', 'k'])
+#     yticks([])
+#     title(str(prior_s_d), fontsize=12)
+
+#     subplot(2,4,7)
+#     plot(prior_e_d.trace())
+#     plot(prior_s_d.trace())
+#     legend()
+#     title('MCMC trace')
+
+#     subplot(2,4,8)
+#     acorr(prior_e_d.trace() - mean(prior_e_d.trace()), maxlags=10, normed=True)
+#     acorr(prior_s_d.trace() - mean(prior_s_d.trace()), maxlags=10, normed=True)
+#     legend()
+#     title('MCMC autocorrelation')
+#     axis([-10,10,-.2,1.2])
+#     yticks([0,1])
+
+#     #savefig(settings.PATH + 'bednets__Priors_%s.png' % time.strftime('%Y_%m_%d_%H_%M'))
 
     ### pick the country of interest
     country_set = set([d['Country'] for d in population_data])
@@ -215,6 +209,8 @@ def main(country_list=None):
         print c
 
         # get population data for this country, to calculate LLINs per capita
+        # TODO: refactor into a data module
+        # pop = data.population(c, year_start, year_end)
         population = zeros(year_end - year_start)
         for d in population_data:
             if d['Country'] == c:
@@ -223,24 +219,6 @@ def main(country_list=None):
         for ii in range(1, year_end-year_start):
             if population[ii] == 0.:
                 population[ii] = population[ii-1]
-                
-        ### find some descriptive statistics to use as initial conditions
-        nd_all = [d['Program_LLINs'] for d in administrative_llin_distribution_data \
-                      if d['Country'] == c] \
-                      + [float(d['Total_LLINs']) for d in household_llin_distribution_data \
-                             if d['Country'] == c and d['Year'] == d['Survey_Year2']]
-        # if there is no distribution data, make some up
-        if len(nd_all) == 0:
-            nd_all = [ 1000. ]
-
-        nd_min = min(nd_all)
-
-        nm_all = [float(d['Manu_Itns']) for d in manufacturing_llin_data if d['Country'] == c]
-        # if there is no manufacturing data, make some up
-        if len(nm_all) == 0:
-            nm_all = [ 1000. ]
-        nm_min = min(nm_all)
-
 
         ### setup the model variables
         vars = []
@@ -251,47 +229,45 @@ def main(country_list=None):
 
         logit_pi = Normal('logit(Pr[net is lost])', mu=logit(.05), tau=1., value=logit(.05))
         pi = InvLogit('Pr[net is lost]', logit_pi)
-        vars += [logit_pi, pi]
-        
-        
-        eta = Normal('coverage factor', mu=5., tau=1., value=5.)
-        vars += [eta]
-        
-
         s_r = Gamma('error in llin retention data', 20., 20./.15, value=.15)
+        vars += [logit_pi, pi, s_r]
+        
+        eta = Normal('coverage factor', 5., 1.**-2, value=5.)
+        zeta = Lognormal('zero inflation factor', log(.01), 1.**-2, value=.01)
+        vars += [eta, zeta]
+        
+        s_m = Lognormal('error in llin manu', log(.05), .5**-2, value=.05)
+        vars += [s_m]
 
-        log_s_m = Uninformative('log(error in llin manu)', value=log(.05))
-        @deterministic(name='error in llin manufacturing data')
-        def s_m(log_s_m=log_s_m):
-            return exp(log_s_m) + .0001
-        @potential
-        def s_m_potential(s_m=s_m):
-            return gamma_like(s_m, 1., 20.)
-        vars += [log_s_m, s_m, s_m_potential]
+        s_r_c = Lognormal('error in admin coverage data', log(.05), .5**-2, value=.05)
+        vars += [s_r_c]
+        
+        s_rb = Lognormal('recall bias factor', log(.01), 1.**-2, value=.01)
+        vars += [s_rb]
 
-        s_d = Normal('sampling error in admin dist data', prior_s_d.stats()['mean'], prior_s_d.stats()['standard deviation']**-2, value=prior_s_d.stats()['mean'])
-        e_d = Normal('sys error in admin dist data', prior_e_d.stats()['mean'], prior_e_d.stats()['standard deviation']**-2, value=prior_e_d.stats()['mean'])
-        #e_d = Normal('sys error in admin dist data', 0., 1/.01**2, value=0.)
-        #s_d = Gamma('sampling error in admin dist data', 20., 20./.05, value=.05)
-        vars += [s_r, s_d, e_d]
+        mu_s_d = 1.0 #prior_s_d.stats()['mean']
+        s_s_d = .1  #prior_s_d.stats()['standard deviation']
+        s_d = Normal('sampling error in admin dist data', mu_s_d, s_s_d**-2, value=mu_s_d)
 
-        log_s_rb = Uninformative('log(recall bias)', value=log(.05))
-        @deterministic(name='recall bias design factor')
-        def s_rb(log_s_rb=log_s_rb):
-            return exp(log_s_rb) + .0001
-        @potential
-        def s_rb_potential(s_rb=s_rb):
-            return gamma_like(s_rb, 1., 20.)
-        vars += [log_s_rb, s_rb, s_rb_potential]
+        mu_e_d = .5 #prior_e_d.stats()['mean']
+        mu_e_d = 0.
+        s_e_d = .2 # prior_e_d.stats()['standard deviation']
+        e_d = Normal('sys error in admin dist data', mu_e_d, s_e_d**-2, value=mu_e_d)
+        vars += [s_d, e_d]
 
         mu_nd = .001 * population
-        nd = Lognormal('llins distributed', mu=log(mu_nd), tau=1., value=mu_nd)
-
+        nd = Lognormal('llins distributed', mu=log(mu_nd), tau=3.**-2, value=mu_nd)
+        
         mu_nm = .001 * population
-        nm = Lognormal('llins manufactured', mu=log(mu_nm), tau=1., value=mu_nm)
+        nm = Lognormal('llins manufactured', mu=log(mu_nm), tau=3.**-2, value=mu_nm)
+        
+        mu_h_prime = .001 * population
+        Hprime = Lognormal('non-llin household net stock', mu=log(mu_h_prime), tau=3.**-2, value=mu_h_prime)
 
-        W_0 = Lognormal('initial llin warehouse net stock', mu=log(.0001 * population[0]), tau=11.1, value=.0001*population[0])
-        H_0 = Lognormal('initial llin household net stock', mu=log(.0001 * population[0]), tau=11.1, value=.0001*population[0])
+        W_0 = Lognormal('initial llin warehouse net stock', mu=log(.00001 * population[0]),
+                        tau=.3**-2, value=.00001*population[0])
+        H_0 = Lognormal('initial llin household net stock', mu=log(.00001 * population[0]),
+                        tau=.3**-2, value=.00001*population[0])
 
         @deterministic(name='llin warehouse net stock')
         def W(W_0=W_0, nm=nm, nd=nd):
@@ -320,7 +296,7 @@ def main(country_list=None):
         def H2(H_0=H_0, H1=H1, pi=pi):
             H2 = zeros(year_end-year_start)
             for t in range(year_end - year_start - 1):
-                H2[t+1] = H1[t] * (1 - pi)
+                H2[t+1] = H1[t] * (1 - pi)**.5
             return H2
 
         @deterministic(name='3-year-old household llin stock')
@@ -343,16 +319,13 @@ def main(country_list=None):
 
         @deterministic(name='llin coverage')
         def llin_coverage(H=H, population=population,
-                          eta=eta):
-            return 1. - exp(-eta * H / population)
-
-        mu_h_prime = .001 * population
-        Hprime = Lognormal('non-llin household net stock', mu=log(mu_h_prime), tau=1.)
+                          eta=eta, zeta=zeta):
+            return 1. - zeta - (1-zeta)*exp(-eta * H / population)
 
         @deterministic(name='itn coverage')
         def itn_coverage(H_llin=H, H_non_llin=Hprime, population=population,
-                         eta=eta):
-            return 1. - exp(-eta * (H_llin + H_non_llin) / population)
+                         eta=eta, zeta=zeta):
+            return 1. - zeta - (1-zeta)*exp(-eta * (H_llin + H_non_llin) / population)
 
         vars += [nd, nm, W_0, H_0, W, T, H, H1, H2, H3, H4, llin_coverage, Hprime, itn_coverage]
 
@@ -368,43 +341,38 @@ def main(country_list=None):
 
         @potential
         def smooth_W(W=W):
-            return normal_like(diff(log(maximum(W,1))), 0., 1. / (1.)**2)
+            return normal_like(diff(log(maximum(W,1))), 0., 10.**-2)
 
         @potential
         def smooth_H(H=H):
-            return normal_like(diff(log(maximum(H,1))), 0., 1. / (1.)**2)
+            return normal_like(diff(log(maximum(H,1))), 0., 10.**-2)
 
         @potential
         def smooth_Hprime(H=Hprime):
-            return normal_like(diff(log(maximum(H,1))), 0., 1. / (.5)**2)
+            return normal_like(diff(log(maximum(H,1))), 0., .5**-2)
 
         @potential
         def smooth_nd(nd=nd):
-            return normal_like(diff(log(maximum(nd,1))), 0., 1. / (1.)**2)
+            return normal_like(diff(log(maximum(nd,1))), 0., 10.**-2)
 
         @potential
         def positive_stocks(H=H, W=W, Hprime=Hprime):
             return -1000 * (dot(H**2, H < 0) + dot(W**2, W < 0) + dot(Hprime**2, Hprime < 0))
 
-        vars += [smooth_H, smooth_Hprime, smooth_W, smooth_nd, positive_stocks,]
+        vars += [smooth_H, smooth_Hprime, smooth_W, smooth_nd, positive_stocks]
 
-        #@potential
-        #def T_near_1(T=T):
-        #    return normal_like(T, ones(shape(T)), 1. / (1.)**2)
-        #vars += [T_near_1]
-
-        #@potential
-        #def smooth_T(T=T):
-        #    return normal_like(diff(T), 0., 1. / (.1)**2)
-        #
-        #vars += [smooth_T]
+        @potential
+        def proven_supply(nm=nm):
+            max_log_nm = log(maximum(1.,[max(nm[:(i+1)]) for i in range(len(nm))]))
+            amt_below_cap = minimum(log(maximum(nm,1.)) - max_log_nm, 0.)
+            return normal_like(amt_below_cap, 0., 10.**-2)
 
         @potential
         def proven_capacity(nd=nd):
             max_log_nd = log(maximum(1.,[max(nd[:(i+1)]) for i in range(len(nd))]))
             amt_below_cap = minimum(log(maximum(nd,1.)) - max_log_nd, 0.)
-            return normal_like(amt_below_cap, 0., 1. / (.1)**2)
-        vars += [proven_capacity]
+            return normal_like(amt_below_cap, 0., .1**-2)
+        vars += [proven_capacity, proven_supply]
 
            #####################
           ### statistical model
@@ -539,20 +507,28 @@ def main(country_list=None):
                 d['coverage_se'] = float(d['ITNs0_SE'])
                 mean_survey_date = time.strptime(d['Mean_SvyDate'], '%d-%b-%y')
                 d['Year'] = mean_survey_date[0] + mean_survey_date[1]/12.
+                @observed
+                @stochastic(name='ITN_Coverage_%s_%s' % (d['Country'], d['Year']))
+                def obs(value=d['coverage'],
+                        year=d['Year'],
+                        std_err=d['coverage_se'],
+                        coverage=itn_coverage):
+                    year_part = year-floor(year)
+                    coverage_i = (1-year_part) * coverage[floor(year)-year_start] + year_part * coverage[ceil(year)-year_start]
+                    return normal_like(value, coverage_i, 1. / std_err**2)
 
             else: # data from report
-                d['coverage_se'] = .01  # made up standard error
                 d['Year'] = d['Survey_Year1'] + .5
+                @observed
+                @stochastic(name='ITN_Coverage_Report_%s_%s' % (d['Country'], d['Year']))
+                def obs(value=d['coverage'],
+                        year=d['Year'],
+                        std_err=s_r_c,
+                        coverage=itn_coverage):
+                    year_part = year-floor(year)
+                    coverage_i = (1-year_part) * coverage[floor(year)-year_start] + year_part * coverage[ceil(year)-year_start]
+                    return normal_like(log(value), log(coverage_i), 1. / std_err**2)
             
-            @observed
-            @stochastic(name='ITN_Coverage_%s_%s' % (d['Country'], d['Year']))
-            def obs(value=d['coverage'],
-                    year=d['Year'],
-                    std_err=d['coverage_se'],
-                    coverage=itn_coverage):
-                year_part = year-floor(year)
-                coverage_i = (1-year_part) * coverage[floor(year)-year_start] + year_part * coverage[ceil(year)-year_start]
-                return normal_like(value, coverage_i, 1. / std_err**2)
             coverage_obs.append(obs)
 
 
@@ -587,21 +563,21 @@ def main(country_list=None):
         print 'running fit for net model in %s...' % c
 
         method = 'MCMC'
-        method = 'NormApprox'
+        #method = 'NormApprox'
 
         if method == 'MCMC':
             map = MAP(vars)
             if settings.TESTING:
                 map.fit(method='fmin', iterlim=100, verbose=1)
             else:
-                map.fit(method='fmin', iterlim=100, verbose=1)
-                #map.fit(method='fmin_powell', verbose=1)
+                #map.fit(method='fmin', iterlim=1000, verbose=1)
+                map.fit(method='fmin_powell', verbose=1)
 
             for stoch in [s_r, s_m, s_d, e_d, pi, T]:
                 print '%s: %s' % (str(stoch), str(stoch.value))
 
             mc = MCMC(vars, verbose=1)
-            mc.use_step_method(AdaptiveMetropolis, [nd, nm, Hprime, pi, s_r], verbose=0)
+            mc.use_step_method(AdaptiveMetropolis, [nd, nm, Hprime, pi, s_r, eta, zeta], verbose=0)
             #mc.use_step_method(AdaptiveMetropolis, nd, verbose=0)
             #mc.use_step_method(AdaptiveMetropolis, nm, verbose=0)
 
@@ -613,14 +589,14 @@ def main(country_list=None):
                 else:
                     iter = settings.NUM_SAMPLES
                     thin = settings.THIN
-                    burn = 250000
+                    burn = settings.BURN
                 mc.sample(iter*thin+burn, burn, thin)
             except:
                 pass
 
         elif method == 'NormApprox':
             na = NormApprox(vars)
-            na.fit(method='fmin_powell', tol=.00001, verbose=1)
+            na.fit(method='fmin_powell', tol=.001, verbose=1)
             for stoch in [s_r, s_m, s_d, e_d, pi]:
                 print '%s: %s' % (str(stoch), str(stoch.value))
             na.sample(1000)
@@ -796,7 +772,7 @@ def main(country_list=None):
                  bbox={'facecolor': 'black', 'alpha': 1},
                   color='white', verticalalignment='center', horizontalalignment='right')
 
-        stochs_to_plot = [s_m, s_d, e_d, pi, s_r, nm, nd, W, H, T, eta, eta, s_rb]
+        stochs_to_plot = [s_m, s_d, e_d, pi, s_r, nm, nd, W, H, s_r_c, eta, zeta, s_rb]
 
         cols = 4
         rows = len(stochs_to_plot)
@@ -826,6 +802,7 @@ def main(country_list=None):
 
         subplot(5, cols, 0*cols + 3)
         my_hist(s_m)
+        my_hist(s_r_c)
         xticks([0., .02, .04, .06, .08, .1], ['0%', '2', '4', '6', '8', '10'], fontsize=small_fontsize)
 
 
@@ -837,16 +814,18 @@ def main(country_list=None):
         subplot(5, cols, 2*cols + 3)
         my_hist(pi)
         my_hist(s_r)
-        xticks([0., .05, .1, .15, .2], ['0%', '5', '10', '15', '20'], fontsize=small_fontsize)
+        xticks([0., .1, .2, .3, .4], ['0%', '10', '20', '30', '40'], fontsize=small_fontsize)
 
         subplot(5, cols, 3*cols + 3)
         my_hist(eta)
         xticks([])
-        xticks([3, 4, 5, 6], [3, 4, 5, 6], fontsize=small_fontsize)
+        xticks([3, 6, 9], [3, 6, 9], fontsize=small_fontsize)
 
         subplot(5, cols, 4*cols + 3)
         my_hist(s_rb)
-        xticks([.15, .2, .25, .3, .35, .4], ['15%', '20', '25', '30', '35', '40'], fontsize=small_fontsize)
+        my_hist(zeta)
+        xticks([0., .02, .04, .06], ['0%', '2', '4', '6'], fontsize=small_fontsize)
+        #xticks([.15, .2, .25, .3, .35, .4], ['15%', '20', '25', '30', '35', '40'], fontsize=small_fontsize)
         
 
         rows = 5
@@ -856,12 +835,12 @@ def main(country_list=None):
         if len(manufacturing_obs) > 0:
             scatter_data(manufacturing_llin_data, c, 'Country', 'Manu_Itns',
                          error_val=1.96 * s_m.stats()['mean'], offset=.5)
-        decorate_figure(ymax=stoch_max(nm)/1.e6)
+        decorate_figure(ymax=3) #stoch_max(nm)/1.e6)
 
         subplot(rows, cols/2, 1*(cols/2)+1)
-        title('nets in warehouse', fontsize=fontsize)
+        title('nets in country, not in households', fontsize=fontsize)
         plot_fit(W)
-        decorate_figure(ymax=stoch_max(W)/1.e6)
+        decorate_figure(ymax=3) #stoch_max(W)/1.e6)
 
         subplot(rows, cols/2, 2*(cols/2)+1)
         title('nets distributed', fontsize=fontsize)
@@ -877,7 +856,7 @@ def main(country_list=None):
                          pi=pi.stats()['mean'][0], s_r=s_r.stats()['mean'],
                          label=label, offset=.5)
         legend(loc='upper left')
-        decorate_figure(ymax=stoch_max(nd)/1.e6)
+        decorate_figure(ymax=3) #stoch_max(nd)/1.e6)
 
         subplot(rows, cols/2, 4*(cols/2)+1)
         title(str(itn_coverage), fontsize=fontsize)
@@ -895,7 +874,7 @@ def main(country_list=None):
                      fmt='bs', scale=.01)
         scatter_data(coverage_itn_data, c, 'Country', 'coverage', 'coverage_se',
                      fmt='r^', scale=.01)
-        decorate_figure(ystr='At least one net (%)')
+        decorate_figure(ystr='At least one net (%)', ymax=80)
 
         subplot(rows, cols/2, 3*(cols/2)+1)
         title('nets in households', fontsize=fontsize)
@@ -905,7 +884,7 @@ def main(country_list=None):
             d['Year'] = mean_survey_date[0] + mean_survey_date[1]/12.
         scatter_data(household_llin_stock_data, c, 'Country', 'SvyIndex_LLINstotal',
                      error_key='SvyIndex_st', fmt='bs')
-        decorate_figure(ymax=stoch_max(H)/1.e6)
+        decorate_figure(ymax=3) #stoch_max(H)/1.e6)
 
         savefig('bednets_%s_%d_%s.png' % (c, c_id, time.strftime('%Y_%m_%d_%H_%M')))
 
