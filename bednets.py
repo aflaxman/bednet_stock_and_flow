@@ -233,13 +233,13 @@ def main(country_list=None):
         vars += [logit_pi, pi, s_r]
         
         eta = Normal('coverage factor', 5., 1.**-2, value=5.)
-        zeta = Lognormal('zero inflation factor', log(.01), 1.**-2, value=.01)
+        zeta = Beta('zero inflation factor', 10., 1000., value=.01)
         vars += [eta, zeta]
         
         s_m = Lognormal('error in llin manu', log(.05), .5**-2, value=.05)
         vars += [s_m]
 
-        s_r_c = Lognormal('error in admin coverage data', log(.05), .5**-2, value=.05)
+        s_r_c = Lognormal('error in admin coverage data', log(.01), .1**-2, value=.01)
         vars += [s_r_c]
         
         s_rb = Lognormal('recall bias factor', log(.01), 1.**-2, value=.01)
@@ -256,14 +256,25 @@ def main(country_list=None):
         vars += [s_d, e_d]
 
         mu_nd = .001 * population
+        #log_nd = Normal('log(llins distributed)', mu=log(mu_nd), tau=3.**-2, value=log(mu_nd))
+        #nd = Lambda('llins distributed', lambda x=log_nd: exp(x))
         nd = Lognormal('llins distributed', mu=log(mu_nd), tau=3.**-2, value=mu_nd)
         
         mu_nm = .001 * population
+        #log_nm = Normal('log(llins manufactured)', mu=log(mu_nm), tau=3.**-2, value=log(mu_nm))
+        #nm = Lambda('llins manufactured', lambda x=log_nm: exp(x))
         nm = Lognormal('llins manufactured', mu=log(mu_nm), tau=3.**-2, value=mu_nm)
         
         mu_h_prime = .001 * population
-        Hprime = Lognormal('non-llin household net stock', mu=log(mu_h_prime), tau=3.**-2, value=mu_h_prime)
-
+        #log_Hprime = Normal('log(non-llin household net stock)',
+        #                    mu=log(mu_h_prime), tau=3.**-2, value=log(mu_h_prime))
+        #Hprime = Lambda('non-llin household net stock', lambda x=log_Hprime: exp(x))
+        Hprime = Lognormal('non-llin household net stock',
+                            mu=log(mu_h_prime), tau=3.**-2, value=mu_h_prime)
+        
+        vars += [nd, nm, Hprime]
+        #vars += [log_nd, log_nm, log_Hprime, nd, nm, Hprime]
+        
         W_0 = Lognormal('initial llin warehouse net stock', mu=log(.00001 * population[0]),
                         tau=.3**-2, value=.00001*population[0])
         H_0 = Lognormal('initial llin household net stock', mu=log(.00001 * population[0]),
@@ -327,7 +338,7 @@ def main(country_list=None):
                          eta=eta, zeta=zeta):
             return 1. - zeta - (1-zeta)*exp(-eta * (H_llin + H_non_llin) / population)
 
-        vars += [nd, nm, W_0, H_0, W, T, H, H1, H2, H3, H4, llin_coverage, Hprime, itn_coverage]
+        vars += [W_0, H_0, W, T, H, H1, H2, H3, H4, llin_coverage, itn_coverage]
 
 
         # set initial condition on W_0 to have no stockouts
@@ -349,7 +360,7 @@ def main(country_list=None):
 
         @potential
         def smooth_Hprime(H=Hprime):
-            return normal_like(diff(log(maximum(H,1))), 0., .5**-2)
+            return normal_like(diff(log(maximum(H,1))), 0., .25**-2)
 
         @potential
         def smooth_nd(nd=nd):
@@ -396,6 +407,7 @@ def main(country_list=None):
             # also take this opportinuty to set better initial values for the MCMC
             cur_val = copy.copy(nm.value)
             cur_val[int(d['Year']) - year_start] = float(d['Manu_Itns'])
+            #log_nm.value = log(cur_val)
             nm.value = cur_val
 
         vars += [manufacturing_obs]
@@ -419,6 +431,7 @@ def main(country_list=None):
             # also take this opportinuty to set better initial values for the MCMC
             cur_val = copy.copy(nd.value)
             cur_val[int(d['Year']) - year_start] = d['Program_LLINs']
+            #log_nd.value = log(cur_val)
             nd.value = cur_val
 
         vars += [admin_distribution_obs]
@@ -450,6 +463,7 @@ def main(country_list=None):
             # also take this opportinuty to set better initial values for the MCMC
             cur_val = copy.copy(nd.value)
             cur_val[estimate_year - year_start] = d2_i / (1 - pi.value)**(survey_year - estimate_year - .5)
+            #log_nd.value = log(cur_val)
             nd.value = cur_val
 
         vars += [household_distribution_obs]
@@ -519,6 +533,7 @@ def main(country_list=None):
 
             else: # data from report
                 d['Year'] = d['Survey_Year1'] + .5
+                d['coverage_se'] = 0.
                 @observed
                 @stochastic(name='ITN_Coverage_Report_%s_%s' % (d['Country'], d['Year']))
                 def obs(value=d['coverage'],
@@ -527,7 +542,7 @@ def main(country_list=None):
                         coverage=itn_coverage):
                     year_part = year-floor(year)
                     coverage_i = (1-year_part) * coverage[floor(year)-year_start] + year_part * coverage[ceil(year)-year_start]
-                    return normal_like(log(value), log(coverage_i), 1. / std_err**2)
+                    return normal_like(value, coverage_i, 1. / std_err**2)
             
             coverage_obs.append(obs)
 
@@ -536,6 +551,7 @@ def main(country_list=None):
             t = floor(d['Year'])-year_start
             cur_val = copy.copy(Hprime.value)
             cur_val[t] = max(.0001*population[t], log(1-d['coverage']) * population[t] / eta.value - H.value[t])
+            #log_Hprime.value = log(cur_val)
             Hprime.value = cur_val
 
         vars += [coverage_obs]
@@ -562,24 +578,20 @@ def main(country_list=None):
         #################
         print 'running fit for net model in %s...' % c
 
-        method = 'MCMC'
-        #method = 'NormApprox'
-
-        if method == 'MCMC':
+        if settings.METHOD == 'MCMC':
             map = MAP(vars)
             if settings.TESTING:
                 map.fit(method='fmin', iterlim=100, verbose=1)
             else:
-                #map.fit(method='fmin', iterlim=1000, verbose=1)
                 map.fit(method='fmin_powell', verbose=1)
 
             for stoch in [s_r, s_m, s_d, e_d, pi, T]:
                 print '%s: %s' % (str(stoch), str(stoch.value))
 
             mc = MCMC(vars, verbose=1)
-            mc.use_step_method(AdaptiveMetropolis, [nd, nm, Hprime, pi, s_r, eta, zeta], verbose=0)
-            #mc.use_step_method(AdaptiveMetropolis, nd, verbose=0)
-            #mc.use_step_method(AdaptiveMetropolis, nm, verbose=0)
+            mc.use_step_method(AdaptiveMetropolis,
+                               [nd, nm, Hprime, logit_pi, s_m, s_rb, s_r_c, e_d, s_d, eta, zeta],
+                               verbose=0)
 
             try:
                 if settings.TESTING:
@@ -594,13 +606,16 @@ def main(country_list=None):
             except:
                 pass
 
-        elif method == 'NormApprox':
+        elif SETTINGS.method == 'NormApprox':
             na = NormApprox(vars)
-            na.fit(method='fmin_powell', tol=.001, verbose=1)
+            na.fit(method='fmin_powell', tol=.00001, verbose=1)
             for stoch in [s_r, s_m, s_d, e_d, pi]:
                 print '%s: %s' % (str(stoch), str(stoch.value))
             na.sample(1000)
 
+        else:
+            assert 0, 'Unknown estimation method'
+            
         # save results in output file
         col_headings = ['Country', 'Year',
                         'LLINs Manufactured (Thousands)', 'LLINs Manufactured Lower CI', 'LLINs Manufactured Upper CI',
@@ -830,7 +845,7 @@ def main(country_list=None):
 
         rows = 5
         subplot(rows, cols/2, 0*(cols/2)+1)
-        title('nets manufactured', fontsize=fontsize)
+        title('LLINs manufactured', fontsize=fontsize)
         plot_fit(nm, style='steps')
         if len(manufacturing_obs) > 0:
             scatter_data(manufacturing_llin_data, c, 'Country', 'Manu_Itns',
@@ -838,12 +853,12 @@ def main(country_list=None):
         decorate_figure(ymax=3) #stoch_max(nm)/1.e6)
 
         subplot(rows, cols/2, 1*(cols/2)+1)
-        title('nets in country, not in households', fontsize=fontsize)
+        title('LLINs in country, not in households', fontsize=fontsize)
         plot_fit(W)
         decorate_figure(ymax=3) #stoch_max(W)/1.e6)
 
         subplot(rows, cols/2, 2*(cols/2)+1)
-        title('nets distributed', fontsize=fontsize)
+        title('LLINs distributed', fontsize=fontsize)
         plot_fit(nd, style='steps')
         if len(admin_distribution_obs) > 0:
             label = 'Administrative Data'
@@ -859,7 +874,7 @@ def main(country_list=None):
         decorate_figure(ymax=3) #stoch_max(nd)/1.e6)
 
         subplot(rows, cols/2, 4*(cols/2)+1)
-        title(str(itn_coverage), fontsize=fontsize)
+        title('ITN and LLIN coverage', fontsize=fontsize)
         plot_fit(itn_coverage, scale=.01)
         plot_fit(llin_coverage, scale=.01, style='alt lines')
         if max(itn_coverage.stats()['mean']) > .1:
@@ -877,7 +892,7 @@ def main(country_list=None):
         decorate_figure(ystr='At least one net (%)', ymax=80)
 
         subplot(rows, cols/2, 3*(cols/2)+1)
-        title('nets in households', fontsize=fontsize)
+        title('LLINs in households', fontsize=fontsize)
         plot_fit(H)
         for d in household_llin_stock_data:
             mean_survey_date = time.strptime(d['Mean_SvyDate'], '%d-%b-%y')
