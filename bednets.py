@@ -236,7 +236,7 @@ def main(country_list=None):
         zeta = Beta('zero inflation factor', 10., 1000., value=.01)
         vars += [eta, zeta]
         
-        s_m = Lognormal('error in llin manu', log(.05), .1**-2, value=.05)
+        s_m = Lognormal('error in llin ship', log(.05), .1**-2, value=.05)
         vars += [s_m]
 
         s_r_c = Lognormal('error in admin coverage data', log(.01), .1**-2, value=.01)
@@ -250,7 +250,7 @@ def main(country_list=None):
         s_d = Normal('sampling error in admin dist data', mu_s_d, s_s_d**-2, value=mu_s_d)
 
         mu_e_d = .5 #prior_e_d.stats()['mean']
-        mu_e_d = 0.
+        #mu_e_d = 0.
         s_e_d = .2 # prior_e_d.stats()['standard deviation']
         e_d = Normal('sys error in admin dist data', mu_e_d, s_e_d**-2, value=mu_e_d)
         vars += [s_d, e_d]
@@ -260,10 +260,10 @@ def main(country_list=None):
         #nd = Lambda('llins distributed', lambda x=log_nd: exp(x))
         nd = Lognormal('llins distributed', mu=log(mu_nd), tau=3.**-2, value=mu_nd)
         
-        mu_nm = .001 * population
+        mu_nm = where(arange(year_start, year_end) < 2004, .0001, .001) * population
         #log_nm = Normal('log(llins manufactured)', mu=log(mu_nm), tau=3.**-2, value=log(mu_nm))
         #nm = Lambda('llins manufactured', lambda x=log_nm: exp(x))
-        nm = Lognormal('llins manufactured', mu=log(mu_nm), tau=3.**-2, value=mu_nm)
+        nm = Lognormal('llins shipped', mu=log(mu_nm), tau=3.**-2, value=mu_nm)
         
         mu_h_prime = .001 * population
         #log_Hprime = Normal('log(non-llin household net stock)',
@@ -583,7 +583,7 @@ def main(country_list=None):
             if settings.TESTING:
                 map.fit(method='fmin', iterlim=100, verbose=1)
             else:
-                map.fit(method='fmin_powell', verbose=1)
+                map.fit(method='fmin_powell', iterlim=10, verbose=1)
 
             for stoch in [s_r, s_m, s_d, e_d, pi, T]:
                 print '%s: %s' % (str(stoch), str(stoch.value))
@@ -606,7 +606,7 @@ def main(country_list=None):
             except:
                 pass
 
-        elif SETTINGS.method == 'NormApprox':
+        elif settings.METHOD == 'NormApprox':
             na = NormApprox(vars)
             na.fit(method='fmin_powell', tol=.00001, verbose=1)
             for stoch in [s_r, s_m, s_d, e_d, pi]:
@@ -618,7 +618,7 @@ def main(country_list=None):
             
         # save results in output file
         col_headings = ['Country', 'Year',
-                        'LLINs Manufactured (Thousands)', 'LLINs Manufactured Lower CI', 'LLINs Manufactured Upper CI',
+                        'LLINs Shipped (Thousands)', 'LLINs Shipped Lower CI', 'LLINs Shipped Upper CI',
                         'LLINs Distributed (Thousands)', 'LLINs Distributed Lower CI', 'LLINs Distributed Upper CI',
                         'LLINs in Warehouse (Thousands)', 'LLINs in Warehouse Lower CI', 'LLINs in Warehouse Upper CI',
                         'LLINs Owned (Thousands)', 'LLINs Owned Lower CI', 'LLINs Owned Upper CI',
@@ -845,33 +845,33 @@ def main(country_list=None):
 
         rows = 5
         subplot(rows, cols/2, 0*(cols/2)+1)
-        title('LLINs manufactured', fontsize=fontsize)
-        plot_fit(nm, style='steps')
+        title('LLINs shipped (per capita)', fontsize=fontsize)
+        plot_fit(nm, scale=population, style='steps')
         if len(manufacturing_obs) > 0:
-            scatter_data(manufacturing_llin_data, c, 'Country', 'Manu_Itns',
+            scatter_data(manufacturing_llin_data, c, 'Country', 'Manu_Itns', scale=mean(population),
                          error_val=1.96 * s_m.stats()['mean'], offset=.5)
-        decorate_figure(ymax=3) #stoch_max(nm)/1.e6)
+        decorate_figure(ymax=.2)
 
         subplot(rows, cols/2, 1*(cols/2)+1)
-        title('LLINs in country, not in households', fontsize=fontsize)
-        plot_fit(W)
-        decorate_figure(ymax=3) #stoch_max(W)/1.e6)
+        title('LLINs in country, not in households (per capita)', fontsize=fontsize)
+        plot_fit(W, scale=population)
+        decorate_figure(ymax=.2)
 
         subplot(rows, cols/2, 2*(cols/2)+1)
-        title('LLINs distributed', fontsize=fontsize)
-        plot_fit(nd, style='steps')
+        title('LLINs distributed (per capita)', fontsize=fontsize)
+        plot_fit(nd, style='steps', scale=population)
         if len(admin_distribution_obs) > 0:
             label = 'Administrative Data'
-            scatter_data(administrative_llin_distribution_data, c, 'Country', 'Program_LLINs',
+            scatter_data(administrative_llin_distribution_data, c, 'Country', 'Program_LLINs', scale=mean(population),
                          error_val=1.96 * s_d.stats()['mean'], label=label, offset=.5)
         if len(household_distribution_obs) > 0:
             label = 'Survey Data'
-            scatter_data(household_llin_distribution_data, c, 'Country', 'Total_LLINs',
+            scatter_data(household_llin_distribution_data, c, 'Country', 'Total_LLINs', scale=mean(population),
                          error_key='Total_st', fmt='bs',
                          pi=pi.stats()['mean'][0], s_r=s_r.stats()['mean'],
                          label=label, offset=.5)
         legend(loc='upper left')
-        decorate_figure(ymax=3) #stoch_max(nd)/1.e6)
+        decorate_figure(ymax=.2)
 
         subplot(rows, cols/2, 4*(cols/2)+1)
         title('ITN and LLIN coverage', fontsize=fontsize)
@@ -892,14 +892,14 @@ def main(country_list=None):
         decorate_figure(ystr='At least one net (%)', ymax=80)
 
         subplot(rows, cols/2, 3*(cols/2)+1)
-        title('LLINs in households', fontsize=fontsize)
-        plot_fit(H)
+        title('LLINs in households (per capita)', fontsize=fontsize)
+        plot_fit(H, scale=population)
         for d in household_llin_stock_data:
             mean_survey_date = time.strptime(d['Mean_SvyDate'], '%d-%b-%y')
             d['Year'] = mean_survey_date[0] + mean_survey_date[1]/12.
-        scatter_data(household_llin_stock_data, c, 'Country', 'SvyIndex_LLINstotal',
+        scatter_data(household_llin_stock_data, c, 'Country', 'SvyIndex_LLINstotal', scale=mean(population),
                      error_key='SvyIndex_st', fmt='bs')
-        decorate_figure(ymax=3) #stoch_max(H)/1.e6)
+        decorate_figure(ymax=.2)
 
         savefig('bednets_%s_%d_%s.png' % (c, c_id, time.strftime('%Y_%m_%d_%H_%M')))
 
