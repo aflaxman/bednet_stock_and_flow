@@ -360,7 +360,7 @@ def main(country_list=None):
 
         @potential
         def smooth_Hprime(H=Hprime):
-            return normal_like(diff(log(maximum(H,1))), 0., .25**-2)
+            return normal_like(diff(log(maximum(H,1))), 0., .5**-2)
 
         @potential
         def smooth_nd(nd=nd):
