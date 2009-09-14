@@ -589,9 +589,9 @@ def main(country_list=None):
                 print '%s: %s' % (str(stoch), str(stoch.value))
 
             mc = MCMC(vars, verbose=1)
-            mc.use_step_method(AdaptiveMetropolis,
-                               [nd, nm, Hprime, logit_pi, s_m, s_rb, s_r_c, e_d, s_d, eta, zeta],
-                               verbose=0)
+            #mc.use_step_method(AdaptiveMetropolis,
+            #                   [nd, nm, Hprime, logit_pi, s_m, s_rb, s_r_c, e_d, s_d, eta, zeta],
+            #                   verbose=0)
 
             try:
                 if settings.TESTING:

@@ -13,8 +13,8 @@ NUM_SAMPLES = 2000
 #NUM_SAMPLES = 2000
 THIN = 500
 BURN = 500000
-METHOD = 'NormApprox'
-#METHOD = 'MCMC'
+#METHOD = 'NormApprox'
+METHOD = 'MCMC'
 
 # matplotlib backend setup
 import matplotlib
