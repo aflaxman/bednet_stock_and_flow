@@ -589,9 +589,6 @@ def main(country_list=None):
                 print '%s: %s' % (str(stoch), str(stoch.value))
 
             mc = MCMC(vars, verbose=1)
-            #mc.use_step_method(AdaptiveMetropolis,
-            #                   [nd, nm, Hprime, logit_pi, s_m, s_rb, s_r_c, e_d, s_d, eta, zeta],
-            #                   verbose=0)
 
             try:
                 if settings.TESTING:
@@ -805,9 +802,6 @@ def main(country_list=None):
 
             xticks([])
             yticks([])
-            #title('mcmc trace', fontsize=small_fontsize)
-            #ylabel(str(stoch).replace('error in ', '').replace('data','err'),
-            #       fontsize=tiny_fontsize)
 
             subplot(rows, cols*2, 2*cols + ii*2*cols)
             try:
@@ -840,7 +834,6 @@ def main(country_list=None):
         my_hist(s_rb)
         my_hist(zeta)
         xticks([0., .02, .04, .06], ['0%', '2', '4', '6'], fontsize=small_fontsize)
-        #xticks([.15, .2, .25, .3, .35, .4], ['15%', '20', '25', '30', '35', '40'], fontsize=small_fontsize)
         
 
         rows = 5
