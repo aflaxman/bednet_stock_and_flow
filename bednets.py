@@ -228,12 +228,15 @@ def main(country_list=None):
         #######################
 
         # Empirical Bayesian priors
-        logit_pi = Normal('t', .051, .026**-2)
+        import emp_priors
+
+        logit_pi = Normal('logit(Pr[net is lost]', logit(.051), (.026/.051)**-2)
         pi = InvLogit('Pr[net is lost]', logit_pi)
         vars += [logit_pi, pi]
-        
-        eta = Normal('coverage factor', 4.49, 3.035, value=5.)
-        zeta = Normal('zero inflation factor', .235, 122.3, value=.1)
+
+        d = emp_priors.cov_and_zif_fac()
+        eta = Normal('coverage factor', d['eta']['mu'], d['eta']['tau'])
+        zeta = Normal('zero inflation factor', d['zeta']['mu'], d['zeta']['tau'])
         vars += [eta, zeta]
         
         mu_s_d = 1.05
@@ -245,12 +248,12 @@ def main(country_list=None):
         e_d = Normal('bias in admin dist data', mu_e_d, s_e_d**-2, value=mu_e_d)
         vars += [s_d, e_d]
 
+        s_r_c = Lognormal('error in report coverage data', log(.01), .1**-2, value=.01)
+        vars += [s_r_c]
+
         # Fully Bayesian priors
         s_m = Lognormal('error in llin ship', log(.1), .5**-2, value=.1)
         vars += [s_m]
-
-        s_r_c = Lognormal('error in report coverage data', log(.01), .1**-2, value=.01)
-        vars += [s_r_c]
         
         s_rb = Lognormal('recall bias factor', log(.1), .5**-2, value=.01)
         vars += [s_rb]
@@ -288,37 +291,36 @@ def main(country_list=None):
             return T
 
         @deterministic(name='1-year-old household llin stock')
-        def H1(H_0=H_0, nd=nd):
+        def H1(nd=nd):
             H1 = zeros(year_end-year_start)
-            H1[0] = H_0
-            for t in range(year_end - year_start - 1):
-                H1[t+1] = nd[t]
+            H1[1:] = nd[:-1]
             return H1
 
         @deterministic(name='2-year-old household llin stock')
-        def H2(H_0=H_0, H1=H1, pi=pi):
+        def H2(H1=H1, pi=pi):
             H2 = zeros(year_end-year_start)
-            for t in range(year_end - year_start - 1):
-                H2[t+1] = H1[t] * (1 - pi)**.5
+            H2[1:] = H1[:-1] * (1 - pi) ** .5
             return H2
 
         @deterministic(name='3-year-old household llin stock')
         def H3(H_0=H_0, H2=H2, pi=pi):
             H3 = zeros(year_end-year_start)
-            for t in range(year_end - year_start - 1):
-                H3[t+1] = H2[t] * (1 - pi)
+            H3[1:] = H2[:-1] * (1  - pi)
             return H3
 
         @deterministic(name='4-year-old household llin stock')
         def H4(H_0=H_0, H3=H3, pi=pi):
             H4 = zeros(year_end-year_start)
-            for t in range(year_end - year_start - 1):
-                H4[t+1] = H3[t] * (1 - pi)
+            H4[1:] = H3[:-1] * (1 - pi)
             return H4
 
         @deterministic(name='household llin stock')
         def H(H1=H1, H2=H2, H3=H3, H4=H4):
             return H1 + H2 + H3 + H4
+
+        @deterministic(name='household itn stock')
+        def hh_itn(H=H, Hprime=Hprime):
+            return H + Hprime
 
         @deterministic(name='llin coverage')
         def llin_coverage(H=H, population=population,
@@ -330,7 +332,7 @@ def main(country_list=None):
                          eta=eta, zeta=zeta):
             return 1. - zeta - (1-zeta)*exp(-eta * (H_llin + H_non_llin) / population)
 
-        vars += [W_0, H_0, W, T, H, H1, H2, H3, H4, llin_coverage, itn_coverage]
+        vars += [W_0, H_0, W, T, H, H1, H2, H3, H4, hh_itn, llin_coverage, itn_coverage]
 
 
         # set initial condition on W_0 to have no stockouts
@@ -350,19 +352,20 @@ def main(country_list=None):
 #         def smooth_H(H=H):
 #             return normal_like(diff(log(maximum(H,1))), 0., 10.**-2)
 
-        @potential
-        def smooth_Hprime(H=Hprime):
-            return normal_like(diff(log(maximum(H,1))), 0., 1.**-2)
-
 #         @potential
 #         def smooth_nd(nd=nd):
 #             return normal_like(diff(log(maximum(nd,1))), 0., 10.**-2)
 
+        #vars += [smooth_H, smooth_Hprime, smooth_W, smooth_nd, positive_stocks]
+
+
+        @potential
+        def smooth_Hprime(H=Hprime):
+            return normal_like(diff(log(maximum(H,1))), 0., 1.**-2)
+
         @potential
         def positive_stocks(H=H, W=W, Hprime=Hprime):
             return -1000 * (dot(H**2, H < 0) + dot(W**2, W < 0) + dot(Hprime**2, Hprime < 0))
-
-        #vars += [smooth_H, smooth_Hprime, smooth_W, smooth_nd, positive_stocks]
         vars += [smooth_Hprime, positive_stocks]
 
 #         @potential
@@ -446,7 +449,7 @@ def main(country_list=None):
                     estimate_year=estimate_year,
                     survey_year=survey_year,
                     survey_err=s_d2_i,
-                    retention_err=s_r,
+                    #retention_err=s_r,
                     nd=nd, pi=pi, s_rb=s_rb):
                 return normal_like(
                     value,
@@ -879,8 +882,9 @@ def main(country_list=None):
         decorate_figure(ystr='At least one net (%)', ymax=80)
 
         subplot(rows, cols/2, 3*(cols/2)+1)
-        title('LLINs in households (per capita)', fontsize=fontsize)
-        plot_fit(H, scale=population)
+        title('ITNs and LLINs in households (per capita)', fontsize=fontsize)
+        plot_fit(hh_itn, scale=population)
+        plot_fit(H, scale=population, style='alt lines')
         for d in household_llin_stock_data:
             mean_survey_date = time.strptime(d['Mean_SvyDate'], '%d-%b-%y')
             d['Year'] = mean_survey_date[0] + mean_survey_date[1]/12.
@@ -889,9 +893,6 @@ def main(country_list=None):
         decorate_figure(ymax=.2)
 
         savefig('bednets_%s_%d_%s.png' % (c, c_id, time.strftime('%Y_%m_%d_%H_%M')))
-
-    # close the output file
-    f.close()
 
 if __name__ == '__main__':
     usage = 'usage: %prog [options] country_id'
