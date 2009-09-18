@@ -227,58 +227,50 @@ def main(country_list=None):
          ###
         #######################
 
-        logit_pi = Normal('logit(Pr[net is lost])', mu=logit(.05), tau=1., value=logit(.05))
+        # Empirical Bayesian priors
+        logit_pi = Normal('t', .051, .026**-2)
         pi = InvLogit('Pr[net is lost]', logit_pi)
-        s_r = Gamma('error in llin retention data', 20., 20./.15, value=.15)
-        vars += [logit_pi, pi, s_r]
+        vars += [logit_pi, pi]
         
-        eta = Normal('coverage factor', 5., 1.**-2, value=5.)
-        zeta = Beta('zero inflation factor', 10., 1000., value=.01)
+        eta = Normal('coverage factor', 4.49, 3.035, value=5.)
+        zeta = Normal('zero inflation factor', .235, 122.3, value=.1)
         vars += [eta, zeta]
         
-        s_m = Lognormal('error in llin ship', log(.05), .1**-2, value=.05)
-        vars += [s_m]
+        mu_s_d = 1.05
+        s_s_d = .16
+        s_d = Normal('error in admin dist data', mu_s_d, s_s_d**-2, value=mu_s_d)
 
-        s_r_c = Lognormal('error in admin coverage data', log(.01), .1**-2, value=.01)
-        vars += [s_r_c]
-        
-        s_rb = Lognormal('recall bias factor', log(.01), 1.**-2, value=.01)
-        vars += [s_rb]
-
-        mu_s_d = 1.0 #prior_s_d.stats()['mean']
-        s_s_d = .1  #prior_s_d.stats()['standard deviation']
-        s_d = Normal('sampling error in admin dist data', mu_s_d, s_s_d**-2, value=mu_s_d)
-
-        mu_e_d = .5 #prior_e_d.stats()['mean']
-        #mu_e_d = 0.
-        s_e_d = .2 # prior_e_d.stats()['standard deviation']
-        e_d = Normal('sys error in admin dist data', mu_e_d, s_e_d**-2, value=mu_e_d)
+        mu_e_d = .26
+        s_e_d = .26
+        e_d = Normal('bias in admin dist data', mu_e_d, s_e_d**-2, value=mu_e_d)
         vars += [s_d, e_d]
 
+        # Fully Bayesian priors
+        s_m = Lognormal('error in llin ship', log(.1), .5**-2, value=.1)
+        vars += [s_m]
+
+        s_r_c = Lognormal('error in report coverage data', log(.01), .1**-2, value=.01)
+        vars += [s_r_c]
+        
+        s_rb = Lognormal('recall bias factor', log(.1), .5**-2, value=.01)
+        vars += [s_rb]
+
         mu_nd = .001 * population
-        #log_nd = Normal('log(llins distributed)', mu=log(mu_nd), tau=3.**-2, value=log(mu_nd))
-        #nd = Lambda('llins distributed', lambda x=log_nd: exp(x))
         nd = Lognormal('llins distributed', mu=log(mu_nd), tau=3.**-2, value=mu_nd)
         
-        mu_nm = where(arange(year_start, year_end) < 2004, .0001, .001) * population
-        #log_nm = Normal('log(llins manufactured)', mu=log(mu_nm), tau=3.**-2, value=log(mu_nm))
-        #nm = Lambda('llins manufactured', lambda x=log_nm: exp(x))
+        mu_nm = where(arange(year_start, year_end) <= 2003, .00005, .001) * population
         nm = Lognormal('llins shipped', mu=log(mu_nm), tau=3.**-2, value=mu_nm)
         
         mu_h_prime = .001 * population
-        #log_Hprime = Normal('log(non-llin household net stock)',
-        #                    mu=log(mu_h_prime), tau=3.**-2, value=log(mu_h_prime))
-        #Hprime = Lambda('non-llin household net stock', lambda x=log_Hprime: exp(x))
         Hprime = Lognormal('non-llin household net stock',
                             mu=log(mu_h_prime), tau=3.**-2, value=mu_h_prime)
         
         vars += [nd, nm, Hprime]
-        #vars += [log_nd, log_nm, log_Hprime, nd, nm, Hprime]
         
-        W_0 = Lognormal('initial llin warehouse net stock', mu=log(.00001 * population[0]),
-                        tau=.3**-2, value=.00001*population[0])
-        H_0 = Lognormal('initial llin household net stock', mu=log(.00001 * population[0]),
-                        tau=.3**-2, value=.00001*population[0])
+        W_0 = Lognormal('initial llin warehouse net stock', mu=log(.00005 * population[0]),
+                        tau=.3**-2, value=.00005*population[0])
+        H_0 = Lognormal('initial llin household net stock', mu=log(.00005 * population[0]),
+                        tau=.3**-2, value=.00005*population[0])
 
         @deterministic(name='llin warehouse net stock')
         def W(W_0=W_0, nm=nm, nd=nd):
@@ -350,40 +342,42 @@ def main(country_list=None):
          ###
         #####################
 
-        @potential
-        def smooth_W(W=W):
-            return normal_like(diff(log(maximum(W,1))), 0., 10.**-2)
+#         @potential
+#         def smooth_W(W=W):
+#             return normal_like(diff(log(maximum(W,1))), 0., 10.**-2)
 
-        @potential
-        def smooth_H(H=H):
-            return normal_like(diff(log(maximum(H,1))), 0., 10.**-2)
+#         @potential
+#         def smooth_H(H=H):
+#             return normal_like(diff(log(maximum(H,1))), 0., 10.**-2)
 
         @potential
         def smooth_Hprime(H=Hprime):
-            return normal_like(diff(log(maximum(H,1))), 0., .5**-2)
+            return normal_like(diff(log(maximum(H,1))), 0., 1.**-2)
 
-        @potential
-        def smooth_nd(nd=nd):
-            return normal_like(diff(log(maximum(nd,1))), 0., 10.**-2)
+#         @potential
+#         def smooth_nd(nd=nd):
+#             return normal_like(diff(log(maximum(nd,1))), 0., 10.**-2)
 
         @potential
         def positive_stocks(H=H, W=W, Hprime=Hprime):
             return -1000 * (dot(H**2, H < 0) + dot(W**2, W < 0) + dot(Hprime**2, Hprime < 0))
 
-        vars += [smooth_H, smooth_Hprime, smooth_W, smooth_nd, positive_stocks]
+        #vars += [smooth_H, smooth_Hprime, smooth_W, smooth_nd, positive_stocks]
+        vars += [smooth_Hprime, positive_stocks]
 
-        @potential
-        def proven_supply(nm=nm):
-            max_log_nm = log(maximum(1.,[max(nm[:(i+1)]) for i in range(len(nm))]))
-            amt_below_cap = minimum(log(maximum(nm,1.)) - max_log_nm, 0.)
-            return normal_like(amt_below_cap, 0., 10.**-2)
+#         @potential
+#         def proven_supply(nm=nm):
+#             max_log_nm = log(maximum(1.,[max(nm[:(i+1)]) for i in range(len(nm))]))
+#             amt_below_cap = minimum(log(maximum(nm,1.)) - max_log_nm, 0.)
+#             return normal_like(amt_below_cap, 0., 10.**-2)
 
         @potential
         def proven_capacity(nd=nd):
             max_log_nd = log(maximum(1.,[max(nd[:(i+1)]) for i in range(len(nd))]))
             amt_below_cap = minimum(log(maximum(nd,1.)) - max_log_nd, 0.)
-            return normal_like(amt_below_cap, 0., .1**-2)
-        vars += [proven_capacity, proven_supply]
+            return normal_like(amt_below_cap, 0., .25**-2)
+        #vars += [proven_capacity, proven_supply]
+        vars += [proven_capacity]
 
            #####################
           ### statistical model
@@ -556,19 +550,19 @@ def main(country_list=None):
 
         vars += [coverage_obs]
 
-        ### observed net retention 
+#         ### observed net retention 
 
-        retention_obs = []
-        for d in retention_llin_data:
-            @observed
-            @stochastic(name='retention_%s_%s' % (d['Name'], d['Year']))
-            def obs(value=float(d['Retention_Rate']),
-                    T_i=float(d['Follow_up_Time']),
-                    pi=pi, s_r=s_r):
-                return normal_like(value, (1. - pi) ** T_i, 1. / s_r**2)
-            retention_obs.append(obs)
+#         retention_obs = []
+#         for d in retention_llin_data:
+#             @observed
+#             @stochastic(name='retention_%s_%s' % (d['Name'], d['Year']))
+#             def obs(value=float(d['Retention_Rate']),
+#                     T_i=float(d['Follow_up_Time']),
+#                     pi=pi, s_r=s_r):
+#                 return normal_like(value, (1. - pi) ** T_i, 1. / s_r**2)
+#             retention_obs.append(obs)
 
-        vars += [retention_obs]
+#         vars += [retention_obs]
 
 
 
@@ -585,7 +579,7 @@ def main(country_list=None):
             else:
                 map.fit(method='fmin_powell', iterlim=10, verbose=1)
 
-            for stoch in [s_r, s_m, s_d, e_d, pi, T]:
+            for stoch in [s_m, s_d, e_d, pi, T]:
                 print '%s: %s' % (str(stoch), str(stoch.value))
 
             mc = MCMC(vars, verbose=1)
@@ -606,7 +600,7 @@ def main(country_list=None):
         elif settings.METHOD == 'NormApprox':
             na = NormApprox(vars)
             na.fit(method='fmin_powell', tol=.00001, verbose=1)
-            for stoch in [s_r, s_m, s_d, e_d, pi]:
+            for stoch in [s_m, s_d, e_d, pi]:
                 print '%s: %s' % (str(stoch), str(stoch.value))
             na.sample(1000)
 
@@ -784,7 +778,7 @@ def main(country_list=None):
                  bbox={'facecolor': 'black', 'alpha': 1},
                   color='white', verticalalignment='center', horizontalalignment='right')
 
-        stochs_to_plot = [s_m, s_d, e_d, pi, s_r, nm, nd, W, H, s_r_c, eta, zeta, s_rb]
+        stochs_to_plot = [s_m, s_d, e_d, pi, pi, nm, nd, W, H, s_r_c, eta, zeta, s_rb]
 
         cols = 4
         rows = len(stochs_to_plot)
@@ -822,7 +816,7 @@ def main(country_list=None):
 
         subplot(5, cols, 2*cols + 3)
         my_hist(pi)
-        my_hist(s_r)
+        #my_hist(s_r)
         xticks([0., .1, .2, .3, .4], ['0%', '10', '20', '30', '40'], fontsize=small_fontsize)
 
         subplot(5, cols, 3*cols + 3)
@@ -861,7 +855,7 @@ def main(country_list=None):
             label = 'Survey Data'
             scatter_data(household_llin_distribution_data, c, 'Country', 'Total_LLINs', scale=mean(population),
                          error_key='Total_st', fmt='bs',
-                         pi=pi.stats()['mean'][0], s_r=s_r.stats()['mean'],
+                         pi=pi.stats()['mean'][0], #s_r=s_r.stats()['mean'],
                          label=label, offset=.5)
         legend(loc='upper left')
         decorate_figure(ymax=.2)
