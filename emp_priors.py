@@ -10,6 +10,7 @@ import os
 
 import settings
 import data
+import graphics
 
 
 def llin_discard_rate(recompute=False):
@@ -26,7 +27,7 @@ def llin_discard_rate(recompute=False):
     returns a dict suitable for using to instantiate a Beta stoch
     """
     # load and return, if applicable
-    fname = 'emp_prior_reten.json'
+    fname = 'discard_prior.json'
     if fname in os.listdir(settings.PATH) and not recompute:
         f = open(settings.PATH + fname)
         return json.load(f)
@@ -49,23 +50,26 @@ def llin_discard_rate(recompute=False):
         retention_obs.append(obs)
 
         vars += [retention_obs]
-    
+
+    # find model with MCMC
     mc = MCMC(vars, verbose=1)
     iter = 10000
     thin = 20
     burn = 20000
     mc.sample(iter*thin+burn, burn, thin)
 
+    # save fit values for empirical prior
     x = pi.stats()['mean']
     v = pi.stats()['standard deviation']**2
 
-    print 'mean= %.4f, std= %.4f' % (x, v**.5)
-
-    emp_prior_dict = dict(alpha=x*(x*(1-x)/v-1), beta=(1-x)*(x*(1-x)/v-1))
+    emp_prior_dict = dict(mu=x, var=v, tau=1/v,
+                          alpha=x*(x*(1-x)/v-1), beta=(1-x)*(x*(1-x)/v-1))
     f = open(settings.PATH + fname, 'w')
     json.dump(emp_prior_dict, f)
 
-    return emp_prior_dict
+    graphics.plot_discard_prior(pi, emp_prior_dict)
+    
+    return pi, sigma, emp_prior_dict
 
 
 def admin_err_and_bias(recompute=False):
@@ -88,15 +92,12 @@ def admin_err_and_bias(recompute=False):
         f = open(settings.PATH + fname)
         return json.load(f)
 
-    discard_prior = llin_discard_rate()
-    mu_pi = discard_prior['alpha'] / (discard_prior['alpha'] + discard_prior['beta'])
-
+    mu_pi = llin_discard_rate()['mu']
 
     # setup hyper-prior stochs
-    sigma = InverseGamma('error in admin dist data', 11., 1.)
+    sigma = Gamma('error in admin dist data', 1., 1.)
     eps = Normal('bias in admin dist data', 0., 1.)
     vars = [sigma, eps]
-
 
     ### setup data likelihood stochs
     data_dict = {}
@@ -132,7 +133,6 @@ def admin_err_and_bias(recompute=False):
                                1. / (log_v + sigma**2))
         vars.append(obs)
 
-
     # sample from empirical prior distribution via MCMC
     mc = MCMC(vars, verbose=1)
     iter = 10000
@@ -141,20 +141,24 @@ def admin_err_and_bias(recompute=False):
 
     mc.sample(iter*thin+burn, burn, thin)
 
-
     # output information on empirical prior distribution
     emp_prior_dict = dict(
-        sigma=dict(mu=sigma.stats()['mean'], tau=sigma.stats()['standard deviation']**-2),
-        eps=dict(mu=eps.stats()['mean'], tau=eps.stats()['standard deviation']**-2))
-    print emp_prior_dict
+        sigma=dict(mu=sigma.stats()['mean'],
+                   std=sigma.stats()['standard deviation'],
+                   tau=sigma.stats()['standard deviation']**-2),
+        eps=dict(mu=eps.stats()['mean'],
+                 std=eps.stats()['standard deviation'],
+                 tau=eps.stats()['standard deviation']**-2))
 
     f = open(settings.PATH + fname, 'w')
     json.dump(emp_prior_dict, f)
 
-    return emp_prior_dict
+    graphics.plot_admin_priors(eps, sigma, emp_prior_dict, data_dict)
+
+    return eps, sigma, emp_prior_dict, data_dict
 
 
-def cov_and_zif_fac(recompute=False):
+def cov_and_zif(recompute=False):
     """ Return the empirical priors for the coverage factor and
     zero-inflation factor, calculating them if necessary.
 
@@ -175,10 +179,9 @@ def cov_and_zif_fac(recompute=False):
         return json.load(f)
 
     # setup hyper-prior stochs
-    e = Normal('coverage factor', 5., 3.)
+    e = Normal('coverage factor', 5., 5.)
     z = Beta('zero inflation factor', 1., 10.)
     vars = [e, z]
-
 
     ### setup data likelihood stochs
     data_dict = {}
@@ -228,18 +231,49 @@ def cov_and_zif_fac(recompute=False):
 
 
     # output information on empirical prior distribution
+    x = z.stats()['mean']
+    v = z.stats()['standard deviation']**2
+
     emp_prior_dict = dict(
-        eta=dict(mu=e.stats()['mean'], tau=e.stats()['standard deviation']**-2),
-        zeta=dict(mu=z.stats()['mean'], tau=z.stats()['standard deviation']**-2))
-    print emp_prior_dict
+        eta=dict(mu=e.stats()['mean'],
+                 std=e.stats()['standard deviation'],
+                 tau=e.stats()['standard deviation']**-2),
+        zeta=dict(mu=x, var=v, tau=1/v,
+                  alpha=x*(x*(1-x)/v-1), beta=(1-x)*(x*(1-x)/v-1))
+        )
 
     f = open(settings.PATH + fname, 'w')
     json.dump(emp_prior_dict, f)
 
-    return emp_prior_dict
+    graphics.plot_cov_and_zif_priors(e, z, emp_prior_dict, data_dict)
+
+    return e, z, emp_prior_dict, data_dict
 
 
+def survey_design(recompute=False):
+    """ Return the empirical priors for the coverage factor and
+    zero-inflation factor, calculating them if necessary.
+
+    Parameters
+    ----------
+    recompute : bool, optional
+      pass recompute=True to force recomputation of empirical priors,
+      even if json file exists
+
+    Results
+    -------
+    returns a dict suitable for using to instantiate normal and beta stochs
+    """
+    # load and return, if applicable
+    fname = 'emp_prior_cov.json'
+    if fname in os.listdir(settings.PATH) and not recompute:
+        f = open(settings.PATH + fname)
+        return json.load(f)
+
+    
 if __name__ == '__main__':
+    import optparse
+    
     usage = 'usage: %prog [options]'
     parser = optparse.OptionParser(usage)
     (options, args) = parser.parse_args()
@@ -249,4 +283,4 @@ if __name__ == '__main__':
 
     llin_discard_rate(recompute=True)
     admin_err_and_bias(recompute=True)
-    cov_and_zif_fac(recompute=True)
+    cov_and_zif(recompute=True)
