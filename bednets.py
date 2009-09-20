@@ -270,25 +270,24 @@ def main(country_list=None):
         
         vars += [nd, nm, Hprime]
         
-        W_0 = Lognormal('initial llin warehouse net stock', mu=log(.00005 * population[0]),
-                        tau=.3**-2, value=.00005*population[0])
-        H_0 = Lognormal('initial llin household net stock', mu=log(.00005 * population[0]),
-                        tau=.3**-2, value=.00005*population[0])
+#         W_0 = Lognormal('initial llin warehouse net stock', mu=log(.00005 * population[0]),
+#                         tau=.3**-2, value=.00005*population[0])
+#         H_0 = Lognormal('initial llin household net stock', mu=log(.00005 * population[0]),
+#                         tau=.3**-2, value=.00005*population[0])
 
         @deterministic(name='llin warehouse net stock')
-        def W(W_0=W_0, nm=nm, nd=nd):
+        def W(nm=nm, nd=nd):
             W = zeros(year_end-year_start)
-            W[0] = W_0
             for t in range(year_end - year_start - 1):
                 W[t+1] = W[t] + nm[t] - nd[t]
             return W
 
-        @deterministic(name='distribution waiting time')
-        def T(W=W, nd=nd, nm=nm):
-            T = zeros(year_end - year_start - 3)
-            for t in range(year_end - year_start - 3):
-                T[t] = sum(maximum(0, nm[t] - maximum(0, cumsum(nd[t:]) - W[t]))[1:]) / nm[t]
-            return T
+#         @deterministic(name='distribution waiting time')
+#         def T(W=W, nd=nd, nm=nm):
+#             T = zeros(year_end - year_start - 3)
+#             for t in range(year_end - year_start - 3):
+#                 T[t] = sum(maximum(0, nm[t] - maximum(0, cumsum(nd[t:]) - W[t]))[1:]) / nm[t]
+#             return T
 
         @deterministic(name='1-year-old household llin stock')
         def H1(nd=nd):
@@ -303,13 +302,13 @@ def main(country_list=None):
             return H2
 
         @deterministic(name='3-year-old household llin stock')
-        def H3(H_0=H_0, H2=H2, pi=pi):
+        def H3(H2=H2, pi=pi):
             H3 = zeros(year_end-year_start)
             H3[1:] = H2[:-1] * (1  - pi)
             return H3
 
         @deterministic(name='4-year-old household llin stock')
-        def H4(H_0=H_0, H3=H3, pi=pi):
+        def H4(H3=H3, pi=pi):
             H4 = zeros(year_end-year_start)
             H4[1:] = H3[:-1] * (1 - pi)
             return H4
@@ -332,12 +331,12 @@ def main(country_list=None):
                          eta=eta, zeta=zeta):
             return 1. - zeta - (1-zeta)*exp(-eta * (H_llin + H_non_llin) / population)
 
-        vars += [W_0, H_0, W, T, H, H1, H2, H3, H4, hh_itn, llin_coverage, itn_coverage]
+        vars += [W, H, H1, H2, H3, H4, hh_itn, llin_coverage, itn_coverage]
 
 
-        # set initial condition on W_0 to have no stockouts
+        # set initial condition on W to have no stockouts
         if min(W.value) < 0:
-            W_0.value = W_0.value - 2*min(W.value)
+            nm.value = nm.value - 2*min(W.value)
 
            #####################
           ### additional priors
@@ -365,7 +364,11 @@ def main(country_list=None):
 
         @potential
         def positive_stocks(H=H, W=W, Hprime=Hprime):
-            return -1000 * (dot(H**2, H < 0) + dot(W**2, W < 0) + dot(Hprime**2, Hprime < 0))
+            if any(W < 0) or any(H < 0) or any(Hprime < 0):
+                return -inf
+            else:
+                return 0.
+            #return -1000 * (dot(H**2, H < 0) + dot(W**2, W < 0) + dot(Hprime**2, Hprime < 0))
         vars += [smooth_Hprime, positive_stocks]
 
 #         @potential
@@ -582,7 +585,7 @@ def main(country_list=None):
             else:
                 map.fit(method='fmin_powell', iterlim=10, verbose=1)
 
-            for stoch in [s_m, s_d, e_d, pi, T]:
+            for stoch in [s_m, s_d, e_d, pi]:
                 print '%s: %s' % (str(stoch), str(stoch.value))
 
             mc = MCMC(vars, verbose=1)
