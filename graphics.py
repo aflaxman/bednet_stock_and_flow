@@ -64,6 +64,38 @@ def plot_discard_prior(pi, discard_prior):
 
     savefig('discard_prior.png')
 
+def plot_survey_design_prior(design_prior, data_vals):
+    """ Generate a plot of the empirical prior for survey design effect
+
+    Parameters
+    ----------
+    design_prior : the dict of empirical prior parameters for the
+      discard rate
+
+    Results
+    -------
+    Generates and saves graphics file 'survey_design_effect_prior.png'
+    """
+    figure(figsize=(6,4), dpi=settings.DPI)
+
+    p_vals = arange(1., 3., .001)
+    
+    # plot empirical prior
+    mu, tau = design_prior['mu'], design_prior['tau']
+    plot(p_vals, exp([normal_like(p, mu, tau)  for p in p_vals]),
+         linewidth=2, alpha=.75, color='blue', linestyle='solid',
+         label='empirical prior')
+
+    # plot data
+    hist(data_vals, 20, normed=True,
+         edgecolor='grey', facecolor='cyan', alpha=.75,
+         label='posterior')
+
+    title('Survey Design Effect')
+
+    savefig('survey_design_effect_prior.png')
+
+    
 def plot_admin_priors(eps, sigma, admin_priors, data_dict):
     figure(figsize=(8.5,4), dpi=settings.DPI)
 

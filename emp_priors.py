@@ -257,7 +257,22 @@ def survey_design(recompute=False):
     -------
     returns a dict suitable for using to instantiate normal and beta stochs
     """
-    return dict(mu=2., tau=.25**-2)
+    # load and return, if applicable
+    fname = 'survey_design_effect_prior.json'
+    if fname in os.listdir(settings.PATH) and not recompute:
+        f = open(settings.PATH + fname)
+        return json.load(f)
+
+    obs = [d['itncomplex_to_simpleratio'] for d in data.design] + \
+        [d['llincomplex_to_simpleratio'] for d in data.design if d['llincomplex_to_simpleratio']]
+    emp_prior_dict = dict(mu=mean(obs), std=std(obs), tau=1/var(obs))
+
+    f = open(settings.PATH + fname, 'w')
+    json.dump(emp_prior_dict, f)
+
+    graphics.plot_survey_design_prior(emp_prior_dict, obs)
+
+    return emp_prior_dict
     
 if __name__ == '__main__':
     import optparse

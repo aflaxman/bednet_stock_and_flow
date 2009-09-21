@@ -41,6 +41,9 @@ def load_csv(fname):
     return data
 
 ### load all data from csv files
+retention = load_csv('reten.csv')
+design = load_csv('design.csv')
+
 llin_manu = load_csv('manuitns.csv')
 admin_llin = load_csv('adminllins_itns.csv')
 
@@ -51,8 +54,6 @@ hh_llin_flow = load_csv('flow_llins.csv')
 for d in hh_llin_stock + hh_llin_flow:
     mean_survey_date = time.strptime(d['Mean_SvyDate'], '%d-%b-%y')
     d['mean_survey_date'] = mean_survey_date[0] + mean_survey_date[1]/12.
-
-retention = load_csv('reten.csv')
 
 llin_coverage = load_csv('llincc.csv')
 itn_coverage = load_csv('itncc.csv')
