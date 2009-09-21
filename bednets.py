@@ -302,7 +302,8 @@ def main(country_id):
 
         else: # data from survey report, must calculate standard error
             d['Year'] = d['Survey_Year1'] + .5
-            d['sampling_error'] = d['coverage']*(1-d['coverage'])/sqrt(d['Total_HH'])
+            N = d['Total_HH'] or 1000
+            d['sampling_error'] = d['coverage']*(1-d['coverage'])/sqrt(N)
             d['coverage_se'] = d['sampling_error']*s_r_c.value
             @observed
             @stochastic(name='ITN_Coverage_Report_%s_%s' % (d['Country'], d['Year']))
