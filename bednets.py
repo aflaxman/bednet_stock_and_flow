@@ -62,16 +62,18 @@ def main(country_id):
     vars += [s_rb]
 
     mu_nd = .001 * pop
-    nd = Lognormal('llins distributed', mu=log(mu_nd), tau=3.**-2, value=mu_nd)
+    log_nd = Normal('log(llins distributed)', mu=log(mu_nd), tau=3.**-2, value=log(mu_nd))
+    nd = Lambda('llins distributed', lambda x=log_nd: exp(x))
 
     mu_nm = where(arange(year_start, year_end) <= 2003, .00005, .001) * pop
-    nm = Lognormal('llins shipped', mu=log(mu_nm), tau=3.**-2, value=mu_nm)
+    log_nm = Normal('log(llins shipped)', mu=log(mu_nm), tau=3.**-2, value=log(mu_nm)) 
+    nm = Lambda('llins shipped', lambda x=log_nm: exp(x))
 
     mu_h_prime = .001 * pop
     Hprime = Lognormal('non-llin household net stock',
                         mu=log(mu_h_prime), tau=3.**-2, value=mu_h_prime)
 
-    vars += [nd, nm, Hprime]
+    vars += [log_nd, nd, log_nm, nm, Hprime]
 
     @deterministic(name='llin warehouse net stock')
     def W(nm=nm, nd=nd):
@@ -126,7 +128,7 @@ def main(country_id):
 
     # set initial conditions on nets manufactured to have no stockouts
     if min(W.value) < 0:
-        nm.value = nm.value - 2*min(W.value)
+        log_nm.value = log(nm.value - 2*min(W.value))
 
        #####################
       ### additional priors
@@ -140,7 +142,7 @@ def main(country_id):
     @potential
     def positive_stocks(H=H, W=W, Hprime=Hprime):
         if any(W < 0) or any(H < 0) or any(Hprime < 0):
-            return -inf
+            return sum(minimum(W,0)) + sum(minimum(H, 0)) + sum(minimum(Hprime, 0))
         else:
             return 0.
     vars += [smooth_Hprime, positive_stocks]
@@ -174,9 +176,8 @@ def main(country_id):
 
         # also take this opportinuty to set better initial values for the MCMC
         cur_val = copy.copy(nm.value)
-        cur_val[int(d['Year']) - year_start] = float(d['Manu_Itns'])
-        #log_nm.value = log(cur_val)
-        nm.value = cur_val
+        cur_val[int(d['Year']) - year_start] = min(d['Manu_Itns'], 10.)
+        log_nm.value = log(cur_val)
 
     vars += [manufacturing_obs]
 
@@ -199,8 +200,7 @@ def main(country_id):
         # also take this opportinuty to set better initial values for the MCMC
         cur_val = copy.copy(nd.value)
         cur_val[int(d['Year']) - year_start] = d['Program_LLINs']
-        #log_nd.value = log(cur_val)
-        nd.value = cur_val
+        log_nd.value = log(cur_val)
 
     vars += [admin_distribution_obs]
 
@@ -337,12 +337,16 @@ def main(country_id):
     print 'running fit for net model in %s...' % c
 
     if settings.METHOD == 'MCMC':
-        map = MAP(vars)
         if settings.TESTING:
+            map = MAP(vars)
             map.fit(method='fmin', iterlim=100, verbose=1)
         else:
-            #map.fit(method='fmin_powell', iterlim=10, verbose=1)
-            pass
+            # just optimize some variables, to get reasonable initial conditions
+            map = MAP([log_nm, nm, manufacturing_obs])
+            map.fit(method='fmin_powell', verbose=1)
+
+            map = MAP([log_nd, nd, admin_distribution_obs, household_distribution_obs])
+            map.fit(method='fmin_powell', verbose=1)
 
         for stoch in [s_m, s_d, e_d, pi, eta, zeta]:
             print '%s: %s' % (str(stoch), str(stoch.value))
@@ -359,7 +363,7 @@ def main(country_id):
                 thin = settings.THIN
                 burn = settings.BURN
             mc.sample(iter*thin+burn, burn, thin)
-        except:
+        except KeyError:
             pass
 
     elif settings.METHOD == 'NormApprox':

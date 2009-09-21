@@ -403,7 +403,7 @@ def plot_posterior(c_id, c, pop,
 
     subplot(5, cols, 0*cols + 3)
     my_hist(s_m)
-    xticks([0., .02, .04, .06, .08, .1], ['0%', '2', '4', '6', '8', '10'], fontsize=small_fontsize)
+    xticks([0., .05, .1, .15, .20, .25], ['0%', '5', '10', '15', '20', '25'], fontsize=small_fontsize)
 
 
     subplot(5, cols, 1*cols + 3)
@@ -424,7 +424,7 @@ def plot_posterior(c_id, c, pop,
 
     subplot(5, cols, 4*cols + 3)
     my_hist(s_rb)
-    xticks([0., .02, .04, .06, .08, .1, .12], ['0%', '2', '4', '6', '8', '10', '12'], fontsize=small_fontsize)
+    xticks([0., .05, .1, .15, .20, .25], ['0%', '5', '10', '15', '20', '25'], fontsize=small_fontsize)
 
 
     rows = 5
