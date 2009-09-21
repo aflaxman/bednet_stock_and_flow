@@ -149,6 +149,7 @@ def plot_admin_priors(eps, sigma, admin_priors, data_dict):
     #    d = data_dict[k]
     #    text(d['truth'], d['obs'], ' %s, %s' % k, fontsize=12, alpha=.5, verticalalignment='center')
 
+    savefig('admin_scatter.png')
 
 
 def plot_cov_and_zif_priors(eta, zeta, factor_priors, data_dict):

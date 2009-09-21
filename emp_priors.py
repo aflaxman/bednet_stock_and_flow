@@ -87,7 +87,7 @@ def admin_err_and_bias(recompute=False):
     returns a dict suitable for using to instantiate a Beta stoch
     """
     # load and return, if applicable
-    fname = 'emp_prior_admin.json'
+    fname = 'admin_err_and_bias_prior.json'
     if fname in os.listdir(settings.PATH) and not recompute:
         f = open(settings.PATH + fname)
         return json.load(f)
@@ -173,7 +173,7 @@ def cov_and_zif(recompute=False):
     returns a dict suitable for using to instantiate normal and beta stochs
     """
     # load and return, if applicable
-    fname = 'emp_prior_cov.json'
+    fname = 'cov_and_zif_prior.json'
     if fname in os.listdir(settings.PATH) and not recompute:
         f = open(settings.PATH + fname)
         return json.load(f)
@@ -251,25 +251,13 @@ def cov_and_zif(recompute=False):
 
 
 def survey_design(recompute=False):
-    """ Return the empirical priors for the coverage factor and
-    zero-inflation factor, calculating them if necessary.
-
-    Parameters
-    ----------
-    recompute : bool, optional
-      pass recompute=True to force recomputation of empirical priors,
-      even if json file exists
+    """ Return the empirical prior for the survey design factor
 
     Results
     -------
     returns a dict suitable for using to instantiate normal and beta stochs
     """
-    # load and return, if applicable
-    fname = 'emp_prior_cov.json'
-    if fname in os.listdir(settings.PATH) and not recompute:
-        f = open(settings.PATH + fname)
-        return json.load(f)
-
+    return dict(mu=2., tau=.25**-2)
     
 if __name__ == '__main__':
     import optparse
@@ -284,3 +272,4 @@ if __name__ == '__main__':
     llin_discard_rate(recompute=True)
     admin_err_and_bias(recompute=True)
     cov_and_zif(recompute=True)
+    survey_design(recompute=True)
