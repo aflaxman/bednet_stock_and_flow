@@ -1,5 +1,8 @@
-"""  Script to fit stock-and-flow compartmental model of bednet distribution
+"""  Module to fit stock-and-flow compartmental model of bednet distribution
+>>> for i in range(50):  bednets.main(i)
 """
+
+import settings
 
 from pylab import *
 from pymc import *
@@ -9,7 +12,6 @@ import time
 import optparse
 import random
 
-import settings
 import data
 import emp_priors
 import graphics
@@ -301,6 +303,7 @@ def main(country_id):
         else: # data from survey report, must calculate standard error
             d['Year'] = d['Survey_Year1'] + .5
             d['sampling_error'] = d['coverage']*(1-d['coverage'])/sqrt(d['Total_HH'])
+            d['coverage_se'] = d['sampling_error']*s_r_c.value
             @observed
             @stochastic(name='ITN_Coverage_Report_%s_%s' % (d['Country'], d['Year']))
             def obs(value=d['coverage'],
@@ -337,7 +340,8 @@ def main(country_id):
         if settings.TESTING:
             map.fit(method='fmin', iterlim=100, verbose=1)
         else:
-            map.fit(method='fmin_powell', iterlim=10, verbose=1)
+            #map.fit(method='fmin_powell', iterlim=10, verbose=1)
+            pass
 
         for stoch in [s_m, s_d, e_d, pi, eta, zeta]:
             print '%s: %s' % (str(stoch), str(stoch.value))

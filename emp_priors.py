@@ -1,6 +1,7 @@
 """ Module to generate empirical priors for the stock-and-flow model
 for bednet distribution
 """
+import settings
 
 from numpy import *
 from pymc import *
@@ -8,7 +9,6 @@ from pymc import *
 import simplejson as json
 import os
 
-import settings
 import data
 import graphics
 
