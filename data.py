@@ -4,6 +4,7 @@ for bednet distribution
 
 import csv
 import time
+from numpy import zeros
 
 import settings
 
@@ -58,3 +59,17 @@ itn_coverage = load_csv('itncc.csv')
 
 population = load_csv('pop.csv')
 
+countries = set([d['Country'] for d in population])
+
+def population_for(c, year_start, year_end):
+    pop_vec = zeros(year_end - year_start)
+    for d in population:
+        if d['Country'] == c:
+            pop_vec[int(d['Year']) - year_start] = d['Pop']*1000
+
+    # since we might be predicting into the future, fill in population with last existing value
+    for ii in range(1, year_end-year_start):
+        if pop_vec[ii] == 0.:
+            pop_vec[ii] = pop_vec[ii-1]
+
+    return pop_vec

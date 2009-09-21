@@ -23,11 +23,13 @@ W[t] := number of nets in warehouses at time t
 H1[t] := number of 1-year-old nets in households at time t
 H2[t] := number of 2-year-old nets in households at time t
 H3[t] := number of 3-year-old nets in households at time t
+H4[t] := number of 4-year-old nets in households at time t
 
 m[t] := number of nets manufactured during time period t
 d[t] := number of nets distributed during time period t
 l1[t] := number of 1-year-old nets lost or discarded during time period t
 l2[t] := number of 2-year-old nets lost or discarded during time period t
+l3[t] := number of 3-year-old nets lost or discarded during time period t
 
 The compartments are connected as follows:
 
@@ -38,25 +40,20 @@ The compartments are connected as follows:
                   | l1      | l2        | l3
                   +---->    +---->      +---->
 
-A quantity of interest that can be calculated from this model is the
-expected time it takes a net to reach a household.  Assuming the nets
-are distributed with a first-in-first-out system, this is:
+The primary quantity of interest in this investigation is the fraction
+of households with at least one net.  This is modeled as a two
+parameter non-linear transformation of the LLINs per capita:
 
-T[t] = \sum_{x > 0} (m[t] - (d[t] + ... + d[t+x] - W[t])^+)^+ / m[t]
+llin_coverage[t] = 1 - zeta - (1-zeta) * exp(-eta * H[t] / population[t])
 
-But the primary quantity of interest in this investigation is the
-fraction of households with at least one net.  Assuming the number of
-nets in a household is Poisson, this is:
-
-llin_coverage[t] = 1 - exp(-H[t] / population[t] * household_size)
-
-To also quickly incorporate information about non-LLIN ITNs, there is also a parameter for non-LLIN ITNs:
+To also quickly incorporate information about non-LLIN ITNs, there is
+also a parameter for non-LLIN ITNs:
 
 H'[t] = number of non-LLIN ITNs in households at time t
 
 and the primary quantity of interest is then:
 
-itn_coverage[t] = 1. - exp(-H[t] + H'[t] / population * household_size)
+itn_coverage[t] = 1 - zeta - (1-zeta) * exp(-eta * (H[t] + H'[t]) / population)
         
 
 
@@ -66,21 +63,21 @@ Model parameters
 p_l := the probability a net is lost during a time period
 d[t] := the number of nets distributed during time period t (t = 0, ..., 9)
 m[t] := the number of nets manufactured during time period t (t = 0, ..., 9)
-W_0 := the number of nets in warehouses at time 0
-H_0 := the number of nets in households at time 0
-household_size 
+eta
+zeta
 H'[t]
 
 Model Dynamics
 --------------
 
-W[t+1] = W[t] + m[t] - d[t];  W[0] = W_0
-H1[t+1] = d[t];  H1[0] = H_0
-H2[t+1] = H1[t] - l1[t];  H2[0] = 0
-H3[t+1] = H2[t] - l2[t];  H3[0] = 0
-H4[t+1] = H3[t] - l3[t];  H4[0] = 0
-l1[t] = H1[t] * p_l
+W[t+1] = W[t] + m[t] - d[t];  W[0] = 0
+H1[t+1] = d[t];               H1[0] = 0
+H2[t+1] = H1[t] - l1[t];      H2[0] = 0
+H3[t+1] = H2[t] - l2[t];      H3[0] = 0
+H4[t+1] = H3[t] - l3[t];      H4[0] = 0
+l1[t] = H1[t] * p_l**.5
 l2[t] = H2[t] * p_l
+l3[t] = H3[t] * p_l
 
 
 Assumptions in Dynamics
@@ -88,7 +85,7 @@ Assumptions in Dynamics
 
 The model dynamics make two major assumptions:
 
-1. Every 1- to 3-year-old net is lost/discarded independently
+1. Every 0- to 3-year-old net is lost/discarded independently
    at random with the same probability during the year.
 
 2. Every 4-year-old net is discarded during the year.
@@ -200,13 +197,6 @@ To complete this model, we use uninformative hyper-priors on e_d and s_d:
     s_d ~ Gamma(1., 1./.05)
     e_d ~ Normal(0., 1./.5**2)
 
-
-
-
-To Do
------
-
-Hold out 20% of the data and see how well model can predict it.
 
 
 

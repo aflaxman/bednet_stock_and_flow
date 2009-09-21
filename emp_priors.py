@@ -179,7 +179,7 @@ def cov_and_zif(recompute=False):
         return json.load(f)
 
     # setup hyper-prior stochs
-    e = Normal('coverage factor', 5., 5.)
+    e = Normal('coverage factor', 5., 3.)
     z = Beta('zero inflation factor', 1., 10.)
     vars = [e, z]
 
