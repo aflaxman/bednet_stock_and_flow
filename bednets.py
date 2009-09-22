@@ -61,12 +61,13 @@ def main(country_id):
     s_rb = Lognormal('recall bias factor', log(.1), .5**-2, value=.01)
     vars += [s_rb]
 
-    mu_nd = .001 * pop
-    log_nd = Normal('log(llins distributed)', mu=log(mu_nd), tau=3.**-2, value=log(mu_nd))
+    mu_N = where(arange(year_start, year_end) <= 2003, .00005, .001) * pop
+    std_N = where(arange(year_start, year_end) <= 2003, .3**-2, 3.)
+    
+    log_nd = Normal('log(llins distributed)', mu=log(mu_N), tau=std_N**-2, value=log(mu_N))
     nd = Lambda('llins distributed', lambda x=log_nd: exp(x))
 
-    mu_nm = where(arange(year_start, year_end) <= 2003, .00005, .001) * pop
-    log_nm = Normal('log(llins shipped)', mu=log(mu_nm), tau=3.**-2, value=log(mu_nm)) 
+    log_nm = Normal('log(llins shipped)', mu=log(mu_N), tau=std_N**-2, value=log(mu_N))
     nm = Lambda('llins shipped', lambda x=log_nm: exp(x))
 
     mu_h_prime = .001 * pop
@@ -138,7 +139,8 @@ def main(country_id):
 
     @potential
     def smooth_stocks(W=W, H=H, Hprime=Hprime):
-        return normal_like(diff(log(maximum(W,1))), 0., 1.**-2) + normal_like(diff(log(maximum(H,1))), 0., 1.**-2) + normal_like(diff(log(maximum(Hprime,1))), 0., 1.**-2)
+        #return normal_like(diff(log(maximum(W,1))), 0., 1.**-2) + normal_like(diff(log(maximum(H,1))), 0., 1.**-2) + normal_like(diff(log(maximum(Hprime,1))), 0., 1.**-2)
+        return normal_like(diff(log(maximum(Hprime,1))), 0., 1.**-2)
 
     @potential
     def positive_stocks(H=H, W=W, Hprime=Hprime):
@@ -153,7 +155,12 @@ def main(country_id):
         max_log_nd = log(maximum(1.,[max(nd[:(i+1)]) for i in range(len(nd))]))
         amt_below_cap = minimum(log(maximum(nd,1.)) - max_log_nd, 0.)
         return normal_like(amt_below_cap, 0., .25**-2)
-    vars += [proven_capacity]
+
+    @potential
+    def itn_composition(H_llin=H, H_non_llin=Hprime):
+        frac_llin = H_llin / (H_llin + H_non_llin)
+        return normal_like(frac_llin[[0,1,2,-5,-4,-3,-2,-1]], [0., 0., 0., 1., 1., 1., 1., 1.], 1.**-2)
+    vars += [proven_capacity, itn_composition]
 
 
        #####################
@@ -371,7 +378,8 @@ def main(country_id):
             map.fit(method='fmin_powell', verbose=1)
 
             map = MAP([log_nm, log_nd, log_Hprime,
-                       smooth_stocks, positive_stocks, coverage_obs])
+                       smooth_stocks, positive_stocks, itn_composition,
+                       coverage_obs])
             map.fit(method='fmin_powell', verbose=1)
 
         for stoch in [s_m, s_d, e_d, pi, eta, alpha]:
