@@ -45,10 +45,10 @@ def main(country_id):
                  prior['sigma']['mu'], prior['sigma']['tau'])
     vars += [s_d, e_d]
 
-    prior = emp_priors.cov_and_zif()
-    eta = Normal('coverage factor', prior['eta']['mu'], prior['eta']['tau'])
-    zeta = Beta('zero inflation factor', prior['zeta']['alpha'], prior['zeta']['beta'])
-    vars += [eta, zeta]
+    prior = emp_priors.neg_binom()
+    eta = Normal('coverage parameter', prior['eta']['mu'], prior['eta']['tau'])
+    alpha = Gamma('dispersion parameter', prior['alpha']['alpha'], prior['alpha']['beta'])
+    vars += [eta, alpha]
 
     prior = emp_priors.survey_design()
     s_r_c = Normal('survey design factor for coverage data', prior['mu'], prior['tau'])
@@ -117,13 +117,13 @@ def main(country_id):
 
     @deterministic(name='llin coverage')
     def llin_coverage(H=H, pop=pop,
-                      eta=eta, zeta=zeta):
-        return 1. - zeta - (1-zeta)*exp(-eta * H / pop)
+                      eta=eta, alpha=alpha):
+        return 1. - (alpha / (eta*H/pop + alpha))**alpha
 
     @deterministic(name='itn coverage')
     def itn_coverage(H_llin=H, H_non_llin=Hprime, pop=pop,
-                     eta=eta, zeta=zeta):
-        return 1. - zeta - (1-zeta)*exp(-eta * (H_llin + H_non_llin) / pop)
+                     eta=eta, alpha=alpha):
+        return 1. - (alpha / (eta*(H_llin + H_non_llin)/pop + alpha))**alpha
 
     vars += [W, H, H1, H2, H3, H4, hh_itn, llin_coverage, itn_coverage]
 
@@ -374,11 +374,11 @@ def main(country_id):
                        smooth_stocks, positive_stocks, coverage_obs])
             map.fit(method='fmin_powell', verbose=1)
 
-        for stoch in [s_m, s_d, e_d, pi, eta, zeta]:
+        for stoch in [s_m, s_d, e_d, pi, eta, alpha]:
             print '%s: %s' % (str(stoch), str(stoch.value))
 
         mc = MCMC(vars, verbose=1)
-        mc.use_step_method(AdaptiveMetropolis, [eta, zeta])
+        mc.use_step_method(AdaptiveMetropolis, [eta, alpha])
 
         try:
             if settings.TESTING:
@@ -444,7 +444,7 @@ def main(country_id):
     f.close()
 
     graphics.plot_posterior(country_id, c, pop,
-                            s_m, s_d, e_d, pi, nm, nd, W, H, Hprime, s_r_c, eta, zeta, s_rb,
+                            s_m, s_d, e_d, pi, nm, nd, W, H, Hprime, s_r_c, eta, alpha, s_rb,
                             manufacturing_obs, admin_distribution_obs, household_distribution_obs,
                             itn_coverage, llin_coverage, hh_itn)
 

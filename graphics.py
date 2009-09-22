@@ -186,7 +186,7 @@ def plot_admin_priors(eps, sigma, admin_priors, data_dict):
     savefig('admin_scatter.png')
 
 
-def plot_cov_and_zif_priors(eta, zeta, factor_priors, data_dict):
+def plot_neg_binom_priors(eta, alpha, factor_priors, data_dict):
     figure(figsize=(8.5,4), dpi=settings.DPI)
 
     ## plot prior for eta
@@ -211,35 +211,89 @@ def plot_cov_and_zif_priors(eta, zeta, factor_priors, data_dict):
          label='empirical prior')
 
     # decorate the figure
-    title('Coverage Factor ($\eta_c$)')
+    xlabel('Coverage Parameter')
+    ylabel('probability density')
 
     ## plot prior for sigma
     subplot(1,2,2)
 
     # plot hyper-prior
-    p_vals = arange(.001,1.,.001)
-    map = MAP([zeta])
+    p_vals = arange(.001,6.,.001)
+    map = MAP([alpha])
     plot(p_vals, exp([-map.func(p) for p in p_vals]),
          linewidth=2, alpha=.75, color='green', linestyle='dashed',
          label='hyper-prior')
 
     # plot posterior
-    hist(zeta.trace(), 20, normed=True,
+    hist(alpha.trace(), 20, normed=True,
          edgecolor='grey', facecolor='cyan', alpha=.75,
          label='posterior')
 
     # plot empirical prior
-    alpha, beta = factor_priors['zeta']['alpha'], factor_priors['zeta']['beta']
-    plot(p_vals, exp([beta_like(p, alpha, beta)  for p in p_vals]),
+    a, b = factor_priors['alpha']['alpha'], factor_priors['alpha']['beta']
+    plot(p_vals, exp([gamma_like(p, a, b)  for p in p_vals]),
          linewidth=2, alpha=.75, color='blue', linestyle='solid',
          label='empirical prior')
 
 
     # decorate the figure
-    title('Zero-Inflation Factor ($\zeta_c$)')
+    xlabel('Dispersion Parameter')
+    ylabel('probability density')
+    
+    savefig('neg_binom_priors.png')
 
-    savefig('cov_and_zif_priors.png')
+def plot_neg_binom_fits():
+    """ Generate figure that demonstrates how suitable the
+    negative-binomial distribution is for fitting LLIN coverage"""
+    import scipy.optimize
 
+    figure(figsize=(8.5,8.5), dpi=settings.DPI)
+    
+    for ii, d in enumerate(data.llin_num):
+        subplot(4, 4, ii+1)
+
+        # plot data
+        x = arange(4)
+        y = array([d['Per_%dLLINs' % i] for i in x])
+        yerr = array([d['LLINs%d_SE' % i] for i in x])
+        bar(x, y*100, yerr=yerr*100,
+            width=.5, alpha=.5, color='blue',
+            log=True)
+
+        # fit data
+        def rmse(theta):
+            y_est = exp([negative_binomial_like(i, theta[0], theta[1])
+                         for i in range(4)])
+            return sqrt(mean((y - y_est) ** 2))
+        mu, alpha = scipy.optimize.fmin(rmse, [5., 1.])
+        print mu, alpha
+
+        # plot fit
+        y_est = exp([negative_binomial_like(i, mu, alpha) for i in x])
+        bar(x+.4, y_est*100,
+            width=.5, alpha=.5, color='green')
+
+        text(4, 50, '%s, %d\nRMSE=%.2f' %
+             (d['Country'], d['Survey_Year1'], 100*rmse([mu,alpha])) + '%',
+             fontsize=10, horizontalalignment='right',verticalalignment='top')
+
+        print 'errors: ', rmse([mu,alpha]), sqrt(sum(yerr**2))
+
+        if ii >= 12:
+            xticks(x+.5,[0,1,2,3], fontsize=8)
+            xlabel('# of LLINs', fontsize=8)
+        else:
+            xticks([])
+
+        if ii % 4 == 0:
+            yticks([.1, 1, 10, 100], [.1, 1, 10, '100%'], fontsize=8)
+            ylabel('% of Households', fontsize=8)
+        else:
+            yticks([])
+            
+        axis([0, 4, .1, 100])
+    savefig('neg_binom_fits.png')
+    
 def plot_posterior(c_id, c, pop,
                    s_m, s_d, e_d, pi, nm, nd, W, H, Hprime, s_r_c, eta, zeta, s_rb,
                    manufacturing_obs, admin_distribution_obs, household_distribution_obs,

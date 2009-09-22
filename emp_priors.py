@@ -158,9 +158,9 @@ def admin_err_and_bias(recompute=False):
     return eps, sigma, emp_prior_dict, data_dict
 
 
-def cov_and_zif(recompute=False):
+def neg_binom(recompute=False):
     """ Return the empirical priors for the coverage factor and
-    zero-inflation factor, calculating them if necessary.
+    dispersion factor, calculating them if necessary.
 
     Parameters
     ----------
@@ -173,15 +173,15 @@ def cov_and_zif(recompute=False):
     returns a dict suitable for using to instantiate normal and beta stochs
     """
     # load and return, if applicable
-    fname = 'cov_and_zif_prior.json'
+    fname = 'neg_binom_prior.json'
     if fname in os.listdir(settings.PATH) and not recompute:
         f = open(settings.PATH + fname)
         return json.load(f)
 
     # setup hyper-prior stochs
-    e = Normal('coverage factor', 5., 3.)
-    z = Beta('zero inflation factor', 1., 10.)
-    vars = [e, z]
+    e = Normal('coverage parameter', 5., 3.)
+    a = Exponential('dispersion parameter', 1.)
+    vars = [e, a]
 
     ### setup data likelihood stochs
     data_dict = {}
@@ -216,38 +216,38 @@ def cov_and_zif(recompute=False):
         @observed
         @stochastic
         def obs(value=d['uncovered'], stock=stock, tau=d['se']**-2,
-                e=e, z=z):
-            return normal_like(value, z + (1-z) * exp(-e * stock), tau)
+                e=e, a=a):
+            return normal_like(value,
+                               exp(negative_binomial_like(0, e * stock, a)),
+                               tau)
         vars += [stock, obs]
-
 
     # sample from empirical prior distribution via MCMC
     mc = MCMC(vars, verbose=1)
-    iter = 10000
+    iter = 1000
     thin = 20
-    burn = 20000
+    burn = 2000
 
     mc.sample(iter*thin+burn, burn, thin)
 
 
     # output information on empirical prior distribution
-    x = z.stats()['mean']
-    v = z.stats()['standard deviation']**2
-
     emp_prior_dict = dict(
         eta=dict(mu=e.stats()['mean'],
                  std=e.stats()['standard deviation'],
                  tau=e.stats()['standard deviation']**-2),
-        zeta=dict(mu=x, var=v, tau=1/v,
-                  alpha=x*(x*(1-x)/v-1), beta=(1-x)*(x*(1-x)/v-1))
+        alpha=dict(mu=a.stats()['mean'],
+                   std=a.stats()['standard deviation'],
+                   alpha=a.stats()['mean']**2/a.stats()['standard deviation']**2,
+                   beta=a.stats()['mean']/a.stats()['standard deviation']**2)
         )
 
     f = open(settings.PATH + fname, 'w')
     json.dump(emp_prior_dict, f)
 
-    graphics.plot_cov_and_zif_priors(e, z, emp_prior_dict, data_dict)
+    graphics.plot_neg_binom_priors(e, a, emp_prior_dict, data_dict)
 
-    return e, z, emp_prior_dict, data_dict
+    return e, a, emp_prior_dict, data_dict
 
 
 def survey_design(recompute=False):
@@ -288,3 +288,5 @@ if __name__ == '__main__':
     admin_err_and_bias(recompute=True)
     cov_and_zif(recompute=True)
     survey_design(recompute=True)
+    
+    graphics.plot_neg_binom_fits()

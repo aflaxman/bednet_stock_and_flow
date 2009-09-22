@@ -58,6 +58,8 @@ for d in hh_llin_stock + hh_llin_flow:
 llin_coverage = load_csv('llincc.csv')
 itn_coverage = load_csv('itncc.csv')
 
+llin_num = load_csv('numllins.csv')
+
 population = load_csv('pop.csv')
 
 countries = set([d['Country'] for d in population])
