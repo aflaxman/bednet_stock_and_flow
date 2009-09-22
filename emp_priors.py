@@ -194,13 +194,13 @@ def cov_and_zif(recompute=False):
 
     # store stock data for each country-year
     for d in data.hh_llin_stock:
-        key = (d['Country'], d['Survey_Year2'])
+        key = (d['Country'], d['Survey_Year1'])
         data_dict[key]['stock'] = d['SvyIndex_LLINstotal'] / data_dict[key]['pop']
         data_dict[key]['stock_se'] = d['SvyIndex_st'] / data_dict[key]['pop']
 
     # store coverage data for each country-year
     for d in data.llin_coverage:
-        key = (d['Country'], d['Survey_Year2'])
+        key = (d['Country'], d['Survey_Year1'])
         data_dict[key]['uncovered'] =  d['Per_0LLINs']
         data_dict[key]['se'] = d['LLINs0_SE']
         

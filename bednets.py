@@ -70,10 +70,11 @@ def main(country_id):
     nm = Lambda('llins shipped', lambda x=log_nm: exp(x))
 
     mu_h_prime = .001 * pop
-    Hprime = Lognormal('non-llin household net stock',
-                        mu=log(mu_h_prime), tau=3.**-2, value=mu_h_prime)
+    log_Hprime = Normal('log(non-llin household net stock)',
+                        mu=log(mu_h_prime), tau=3.**-2, value=log(mu_h_prime))
+    Hprime = Lambda('non-llin household net stock', lambda x=log_Hprime: exp(x))
 
-    vars += [log_nd, nd, log_nm, nm, Hprime]
+    vars += [log_nd, nd, log_nm, nm, log_Hprime, Hprime]
 
     @deterministic(name='llin warehouse net stock')
     def W(nm=nm, nd=nd):
@@ -136,8 +137,8 @@ def main(country_id):
     #####################
 
     @potential
-    def smooth_Hprime(H=Hprime):
-        return normal_like(diff(log(maximum(H,1))), 0., 1.**-2)
+    def smooth_stocks(W=W, H=H, Hprime=Hprime):
+        return normal_like(diff(log(maximum(W,1))), 0., 1.**-2) + normal_like(diff(log(maximum(H,1))), 0., 1.**-2) + normal_like(diff(log(maximum(Hprime,1))), 0., 1.**-2)
 
     @potential
     def positive_stocks(H=H, W=W, Hprime=Hprime):
@@ -145,7 +146,7 @@ def main(country_id):
             return sum(minimum(W,0)) + sum(minimum(H, 0)) + sum(minimum(Hprime, 0))
         else:
             return 0.
-    vars += [smooth_Hprime, positive_stocks]
+    vars += [smooth_stocks, positive_stocks]
 
     @potential
     def proven_capacity(nd=nd):
@@ -230,8 +231,7 @@ def main(country_id):
         # also take this opportinuty to set better initial values for the MCMC
         cur_val = copy.copy(nd.value)
         cur_val[estimate_year - year_start] = d2_i / (1 - pi.value)**(survey_year - estimate_year - .5)
-        #log_nd.value = log(cur_val)
-        nd.value = cur_val
+        log_nd.value = log(cur_val)
 
     vars += [household_distribution_obs]
 
@@ -264,21 +264,39 @@ def main(country_id):
         if d['Country'] != c:
             continue
 
-        d['coverage'] = 1. - float(d['Per_0LLINs'])
-        d['coverage_se'] = float(d['LLINs0_SE'])
-        mean_survey_date = time.strptime(d['Mean_SvyDate'], '%d-%b-%y')
-        d['Year'] = mean_survey_date[0] + mean_survey_date[1]/12.
-
-        @observed
-        @stochastic(name='LLIN_Coverage_%s_%s' % (d['Country'], d['Survey_Year2']))
-        def obs(value=d['coverage'],
-                year=d['Survey_Year2'],
-                std_err=d['coverage_se'],
-                coverage=llin_coverage):
-            year_part = year-floor(year)
-            coverage_i = (1-year_part) * coverage[floor(year)-year_start] + year_part * coverage[ceil(year)-year_start]
-            return normal_like(value, coverage_i, 1. / std_err**2)
+        if d['LLINs0_SE']: # data from survey, includes standard error
+            d['coverage'] = 1. - float(d['Per_0LLINs'])
+            d['coverage_se'] = float(d['LLINs0_SE'])
+            mean_survey_date = time.strptime(d['Mean_SvyDate'], '%d-%b-%y')
+            d['Year'] = mean_survey_date[0] + mean_survey_date[1]/12.
+            
+            @observed
+            @stochastic(name='LLIN_Coverage_%s_%s' % (d['Country'], d['Survey_Year2']))
+            def obs(value=d['coverage'],
+                    year=d['Survey_Year2'],
+                    std_err=d['coverage_se'],
+                    coverage=llin_coverage):
+                year_part = year-floor(year)
+                coverage_i = (1-year_part) * coverage[floor(year)-year_start] + year_part * coverage[ceil(year)-year_start]
+                return normal_like(value, coverage_i, 1. / std_err**2)
+        else: # data is imputed from under 5 usage, so estimate standard error
+            d['coverage'] = 1. - float(d['Per_0LLINs'])
+            N = d['Total_HH'] or 1000
+            d['sampling_error'] = d['coverage']*(1-d['coverage'])/sqrt(N)
+            d['coverage_se'] = d['sampling_error']*s_r_c.value
+            d['Year'] = d['Survey_Year1'] + .5
+            @observed
+            @stochastic(name='LLIN_Coverage_Imputation_%s_%s' % (d['Country'], d['Year']))
+            def obs(value=d['coverage'],
+                    year=d['Year'],
+                    sampling_error=d['sampling_error'],
+                    design_factor=s_r_c,
+                    coverage=llin_coverage):
+                year_part = year-floor(year)
+                coverage_i = (1-year_part) * coverage[floor(year)-year_start] + year_part * coverage[ceil(year)-year_start]
+                return normal_like(value, coverage_i, 1. / (design_factor * sampling_error)**2)
         coverage_obs.append(obs)
+            
 
     for d in data.itn_coverage:
         if d['Country'] != c:
@@ -323,8 +341,7 @@ def main(country_id):
         t = floor(d['Year'])-year_start
         cur_val = copy.copy(Hprime.value)
         cur_val[t] = max(.0001*pop[t], log(1-d['coverage']) * pop[t] / eta.value - H.value[t])
-        #log_Hprime.value = log(cur_val)
-        Hprime.value = cur_val
+        log_Hprime.value = log(cur_val)
 
     vars += [coverage_obs]
 
@@ -342,16 +359,26 @@ def main(country_id):
             map.fit(method='fmin', iterlim=100, verbose=1)
         else:
             # just optimize some variables, to get reasonable initial conditions
-            map = MAP([log_nm, nm, manufacturing_obs])
+            map = MAP([log_nm,
+                       smooth_stocks, positive_stocks,
+                       manufacturing_obs])
             map.fit(method='fmin_powell', verbose=1)
 
-            map = MAP([log_nd, nd, admin_distribution_obs, household_distribution_obs])
+            map = MAP([log_nd,
+                       smooth_stocks, positive_stocks,
+                       admin_distribution_obs, household_distribution_obs,
+                       household_stock_obs])
+            map.fit(method='fmin_powell', verbose=1)
+
+            map = MAP([log_Hprime,
+                       smooth_stocks, positive_stocks, coverage_obs])
             map.fit(method='fmin_powell', verbose=1)
 
         for stoch in [s_m, s_d, e_d, pi, eta, zeta]:
             print '%s: %s' % (str(stoch), str(stoch.value))
 
         mc = MCMC(vars, verbose=1)
+        mc.use_step_method(AdaptiveMetropolis, [eta, zeta])
 
         try:
             if settings.TESTING:
@@ -417,7 +444,7 @@ def main(country_id):
     f.close()
 
     graphics.plot_posterior(country_id, c, pop,
-                            s_m, s_d, e_d, pi, nm, nd, W, H, s_r_c, eta, zeta, s_rb,
+                            s_m, s_d, e_d, pi, nm, nd, W, H, Hprime, s_r_c, eta, zeta, s_rb,
                             manufacturing_obs, admin_distribution_obs, household_distribution_obs,
                             itn_coverage, llin_coverage, hh_itn)
 

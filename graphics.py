@@ -241,7 +241,7 @@ def plot_cov_and_zif_priors(eta, zeta, factor_priors, data_dict):
     savefig('cov_and_zif_priors.png')
 
 def plot_posterior(c_id, c, pop,
-                   s_m, s_d, e_d, pi, nm, nd, W, H, s_r_c, eta, zeta, s_rb,
+                   s_m, s_d, e_d, pi, nm, nd, W, H, Hprime, s_r_c, eta, zeta, s_rb,
                    manufacturing_obs, admin_distribution_obs, household_distribution_obs,
                    itn_coverage, llin_coverage, hh_itn):
     from settings import year_start, year_end
@@ -376,7 +376,7 @@ def plot_posterior(c_id, c, pop,
              bbox={'facecolor': 'black', 'alpha': 1},
               color='white', verticalalignment='center', horizontalalignment='right')
 
-    stochs_to_plot = [s_m, s_d, e_d, pi, pi, nm, nd, W, H, s_r_c, eta, zeta, s_rb]
+    stochs_to_plot = [s_m, s_d, e_d, pi, nm, nd, W, H, Hprime, s_r_c, eta, zeta, s_rb]
 
     cols = 4
     rows = len(stochs_to_plot)
@@ -464,12 +464,7 @@ def plot_posterior(c_id, c, pop,
     if max(itn_coverage.stats()['mean']) > .1:
         hlines([80], 1999, 2009, linestyle='dotted', color='blue', alpha=.5)
 
-    # calculate coverage from fraction of households with zero llins
-    for d in data.llin_coverage:
-        d['coverage'] = 1. - float(d['Per_0LLINs'])
-        mean_survey_date = time.strptime(d['Mean_SvyDate'], '%d-%b-%y')
-        d['Year'] = mean_survey_date[0] + mean_survey_date[1]/12.
-    scatter_data(data.llin_coverage, c, 'Country', 'coverage', 'LLINs0_SE',
+    scatter_data(data.llin_coverage, c, 'Country', 'coverage', 'coverage_se',
                  fmt='bs', scale=.01)
     scatter_data(data.itn_coverage, c, 'Country', 'coverage', 'coverage_se',
                  fmt='r^', scale=.01)
