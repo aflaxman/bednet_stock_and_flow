@@ -370,7 +370,7 @@ def main(country_id):
                        household_stock_obs])
             map.fit(method='fmin_powell', verbose=1)
 
-            map = MAP([log_Hprime,
+            map = MAP([log_nm, log_nd, log_Hprime,
                        smooth_stocks, positive_stocks, coverage_obs])
             map.fit(method='fmin_powell', verbose=1)
 
