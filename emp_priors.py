@@ -286,7 +286,7 @@ if __name__ == '__main__':
 
     llin_discard_rate(recompute=True)
     admin_err_and_bias(recompute=True)
-    cov_and_zif(recompute=True)
+    neg_binom(recompute=True)
     survey_design(recompute=True)
     
     graphics.plot_neg_binom_fits()

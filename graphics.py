@@ -295,7 +295,7 @@ def plot_neg_binom_fits():
     savefig('neg_binom_fits.png')
     
 def plot_posterior(c_id, c, pop,
-                   s_m, s_d, e_d, pi, nm, nd, W, H, Hprime, s_r_c, eta, zeta, s_rb,
+                   s_m, s_d, e_d, pi, nm, nd, W, H, Hprime, s_r_c, eta, alpha, s_rb,
                    manufacturing_obs, admin_distribution_obs, household_distribution_obs,
                    itn_coverage, llin_coverage, hh_itn):
     from settings import year_start, year_end
@@ -430,7 +430,7 @@ def plot_posterior(c_id, c, pop,
              bbox={'facecolor': 'black', 'alpha': 1},
               color='white', verticalalignment='center', horizontalalignment='right')
 
-    stochs_to_plot = [s_m, s_d, e_d, pi, nm, nd, W, H, Hprime, s_r_c, eta, zeta, s_rb]
+    stochs_to_plot = [s_m, s_d, e_d, pi, nm, nd, W, H, Hprime, s_r_c, eta, alpha, s_rb]
 
     cols = 4
     rows = len(stochs_to_plot)
@@ -467,11 +467,11 @@ def plot_posterior(c_id, c, pop,
 
     subplot(5, cols, 2*cols + 3)
     my_hist(pi)
-    my_hist(zeta)
     xticks([0., .1, .2, .3, .4], ['0%', '10', '20', '30', '40'], fontsize=small_fontsize)
 
     subplot(5, cols, 3*cols + 3)
     my_hist(eta)
+    my_hist(alpha)
     my_hist(s_r_c)
     xticks([])
     xticks([1, 3, 5, 7, 9], [1, 3, 5, 7, 9], fontsize=small_fontsize)
