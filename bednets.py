@@ -62,7 +62,7 @@ def main(country_id):
     vars += [s_rb]
 
     mu_N = where(arange(year_start, year_end) <= 2003, .00005, .001) * pop
-    std_N = where(arange(year_start, year_end) <= 2003, .3**-2, 3.)
+    std_N = where(arange(year_start, year_end) <= 2003, .5, 2.)
     
     log_nd = Normal('log(llins distributed)', mu=log(mu_N), tau=std_N**-2, value=log(mu_N))
     nd = Lambda('llins distributed', lambda x=log_nd: exp(x))
@@ -159,7 +159,7 @@ def main(country_id):
     @potential
     def itn_composition(H_llin=H, H_non_llin=Hprime):
         frac_llin = H_llin / (H_llin + H_non_llin)
-        return normal_like(frac_llin[[0,1,2,-5,-4,-3,-2,-1]], [0., 0., 0., 1., 1., 1., 1., 1.], 1.**-2)
+        return normal_like(frac_llin[[0,1,2,-5,-4,-3,-2,-1]], [0., 0., 0., 1., 1., 1., 1., 1.], .5**-2)
     vars += [proven_capacity, itn_composition]
 
 
@@ -382,10 +382,27 @@ def main(country_id):
                        coverage_obs])
             map.fit(method='fmin_powell', verbose=1)
 
+            map = MAP([log_nm,
+                       smooth_stocks, positive_stocks,
+                       manufacturing_obs])
+            map.fit(method='fmin_powell', verbose=1)
+
+            map = MAP([log_nd,
+                       smooth_stocks, positive_stocks,
+                       admin_distribution_obs, household_distribution_obs,
+                       household_stock_obs])
+            map.fit(method='fmin_powell', verbose=1)
+
+            map = MAP([log_nm, log_nd, log_Hprime,
+                       smooth_stocks, positive_stocks, itn_composition,
+                       coverage_obs])
+            map.fit(method='fmin_powell', verbose=1)
+
         for stoch in [s_m, s_d, e_d, pi, eta, alpha]:
             print '%s: %s' % (str(stoch), str(stoch.value))
 
         mc = MCMC(vars, verbose=1)
+        mc.use_step_method(AdaptiveMetropolis, [log_nd, log_nm, log_Hprime])
         mc.use_step_method(AdaptiveMetropolis, [eta, alpha])
 
         try:
