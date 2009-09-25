@@ -27,6 +27,8 @@ echo "**** JOB RUNNING IN $GSITSPWD"
 ##
 
 cd /net/gs/vol1/home/abie/bednet_stock_and_flow/
+export MPLCONFIGDIR='.'
+
 echo calling bednets.py "$@"
 /usr/local/epd_py25-4.3.0/bin/python bednets.py "$@"
 

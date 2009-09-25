@@ -16,7 +16,7 @@ import data
 import emp_priors
 import graphics
 
-def main(country_id):
+def main(country_id, smooth_nonllin_stock_std, itn_composition_std):
     from settings import year_start, year_end
 
     c = sorted(data.countries)[country_id]
@@ -46,8 +46,8 @@ def main(country_id):
     vars += [s_d, e_d]
 
     prior = emp_priors.neg_binom()
-    eta = Normal('coverage parameter', prior['eta']['mu'], prior['eta']['tau'])
-    alpha = Gamma('dispersion parameter', prior['alpha']['alpha'], prior['alpha']['beta'])
+    eta = Normal('coverage parameter', prior['eta']['mu'], prior['eta']['tau'], value=prior['eta']['mu'])
+    alpha = Gamma('dispersion parameter', prior['alpha']['alpha'], prior['alpha']['beta'], value=prior['alpha']['mu'])
     vars += [eta, alpha]
 
     prior = emp_priors.survey_design()
@@ -62,7 +62,7 @@ def main(country_id):
     vars += [s_rb]
 
     mu_N = where(arange(year_start, year_end) <= 2003, .00005, .001) * pop
-    std_N = where(arange(year_start, year_end) <= 2003, .5, 2.)
+    std_N = where(arange(year_start, year_end) <= 2003, .25, 2.5)
     
     log_nd = Normal('log(llins distributed)', mu=log(mu_N), tau=std_N**-2, value=log(mu_N))
     nd = Lambda('llins distributed', lambda x=log_nd: exp(x))
@@ -122,9 +122,9 @@ def main(country_id):
         return 1. - (alpha / (eta*H/pop + alpha))**alpha
 
     @deterministic(name='itn coverage')
-    def itn_coverage(H_llin=H, H_non_llin=Hprime, pop=pop,
+    def itn_coverage(llin=H, non_llin=Hprime, pop=pop,
                      eta=eta, alpha=alpha):
-        return 1. - (alpha / (eta*(H_llin + H_non_llin)/pop + alpha))**alpha
+        return 1. - (alpha / (eta*(llin + non_llin)/pop + alpha))**alpha
 
     vars += [W, H, H1, H2, H3, H4, hh_itn, llin_coverage, itn_coverage]
 
@@ -136,11 +136,13 @@ def main(country_id):
       ### additional priors
      ###
     #####################
-
+    try:
+        smooth_nonllin_stock_std = float(smooth_nonllin_stock_std)
+    except TypeError:
+        smooth_nonllin_stock_std = 1.
     @potential
-    def smooth_stocks(W=W, H=H, Hprime=Hprime):
-        #return normal_like(diff(log(maximum(W,1))), 0., 1.**-2) + normal_like(diff(log(maximum(H,1))), 0., 1.**-2) + normal_like(diff(log(maximum(Hprime,1))), 0., 1.**-2)
-        return normal_like(diff(log(maximum(Hprime,1))), 0., 1.**-2)
+    def smooth_stocks(W=W, H=H, Hprime=Hprime, tau=smooth_nonllin_stock_std**-2):
+        return normal_like(diff(log(maximum(Hprime,1))), 0., tau)
 
     @potential
     def positive_stocks(H=H, W=W, Hprime=Hprime):
@@ -151,15 +153,20 @@ def main(country_id):
     vars += [smooth_stocks, positive_stocks]
 
     @potential
-    def proven_capacity(nd=nd):
-        max_log_nd = log(maximum(1.,[max(nd[:(i+1)]) for i in range(len(nd))]))
-        amt_below_cap = minimum(log(maximum(nd,1.)) - max_log_nd, 0.)
+    def proven_capacity(nd=nd, Hprime=Hprime):
+        total_dist = nd + Hprime
+        max_log_d = log(maximum(1.,[max(total_dist[:(i+1)]) for i in range(len(nd))]))
+        amt_below_cap = minimum(log(maximum(total_dist,1.)) - max_log_d, 0.)
         return normal_like(amt_below_cap, 0., .25**-2)
 
+    try:
+        itn_composition_std = float(itn_composition_std)
+    except TypeError:
+        itn_composition_std = .5
     @potential
-    def itn_composition(H_llin=H, H_non_llin=Hprime):
+    def itn_composition(H_llin=H, H_non_llin=Hprime, tau=itn_composition_std**-2):
         frac_llin = H_llin / (H_llin + H_non_llin)
-        return normal_like(frac_llin[[0,1,2,-5,-4,-3,-2,-1]], [0., 0., 0., 1., 1., 1., 1., 1.], .5**-2)
+        return normal_like(frac_llin[[0,1,2,-5,-4,-3,-2,-1]], [0., 0., 0., 1., 1., 1., 1., 1.], tau)
     vars += [proven_capacity, itn_composition]
 
 
@@ -360,50 +367,38 @@ def main(country_id):
     #################
     print 'running fit for net model in %s...' % c
 
-    if settings.METHOD == 'MCMC':
-        if settings.TESTING:
-            map = MAP(vars)
-            map.fit(method='fmin', iterlim=100, verbose=1)
-        else:
-            # just optimize some variables, to get reasonable initial conditions
-            map = MAP([log_nm,
-                       smooth_stocks, positive_stocks,
-                       manufacturing_obs])
-            map.fit(method='fmin_powell', verbose=1)
+    if settings.TESTING:
+        map = MAP(vars)
+        map.fit(method='fmin', iterlim=100, verbose=1)
+    else:
+        # just optimize some variables, to get reasonable initial conditions
+        map = MAP([log_nm,
+                   smooth_stocks, positive_stocks,
+                   manufacturing_obs])
+        map.fit(method='fmin_powell', verbose=1)
 
-            map = MAP([log_nd,
-                       smooth_stocks, positive_stocks,
-                       admin_distribution_obs, household_distribution_obs,
-                       household_stock_obs])
-            map.fit(method='fmin_powell', verbose=1)
+        map = MAP([log_nd,
+                   smooth_stocks, positive_stocks,
+                   admin_distribution_obs, household_distribution_obs,
+                   household_stock_obs])
+        map.fit(method='fmin_powell', verbose=1)
 
-            map = MAP([log_nm, log_nd, log_Hprime,
-                       smooth_stocks, positive_stocks, itn_composition,
-                       coverage_obs])
-            map.fit(method='fmin_powell', verbose=1)
-
-            map = MAP([log_nm,
-                       smooth_stocks, positive_stocks,
-                       manufacturing_obs])
-            map.fit(method='fmin_powell', verbose=1)
-
-            map = MAP([log_nd,
-                       smooth_stocks, positive_stocks,
-                       admin_distribution_obs, household_distribution_obs,
-                       household_stock_obs])
-            map.fit(method='fmin_powell', verbose=1)
-
-            map = MAP([log_nm, log_nd, log_Hprime,
-                       smooth_stocks, positive_stocks, itn_composition,
-                       coverage_obs])
-            map.fit(method='fmin_powell', verbose=1)
+        map = MAP([log_nm, log_nd, log_Hprime,
+                   smooth_stocks, positive_stocks, itn_composition,
+                   coverage_obs])
+        map.fit(method='fmin_powell', verbose=1)
 
         for stoch in [s_m, s_d, e_d, pi, eta, alpha]:
             print '%s: %s' % (str(stoch), str(stoch.value))
 
+    if settings.METHOD == 'MCMC':
         mc = MCMC(vars, verbose=1)
-        mc.use_step_method(AdaptiveMetropolis, [log_nd, log_nm, log_Hprime])
-        mc.use_step_method(AdaptiveMetropolis, [eta, alpha])
+        #mc.use_step_method(AdaptiveMetropolis, [log_nd, log_nm, log_Hprime])
+        mc.use_step_method(Metropolis, log_nd)
+        mc.use_step_method(Metropolis, log_nm)
+        #mc.use_step_method(Metropolis, log_Hprime)
+        mc.use_step_method(NoStepper, [eta, alpha])
+        mc.use_step_method(NoStepper, [s_m, s_rb])
 
         try:
             if settings.TESTING:
@@ -476,6 +471,10 @@ def main(country_id):
 if __name__ == '__main__':
     usage = 'usage: %prog [options] country_id'
     parser = optparse.OptionParser(usage)
+    parser.add_option('-s', '--smooth', dest='smooth_nonllin_stock_std',
+                      help='standard deviation for non-llin stock smoothing prior (default is 1.0)')
+    parser.add_option('-c', '--composition', dest='itn_composition_std',
+                      help='standard deviation for itn composition prior (default is 0.5)')
     (options, args) = parser.parse_args()
 
     if len(args) != 1:
@@ -486,4 +485,4 @@ if __name__ == '__main__':
         except ValueError:
             parser.error('country_id must be an integer')
 
-        main(country_id)
+        main(country_id, options.smooth_nonllin_stock_std, options.itn_composition_std)
