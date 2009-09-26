@@ -6,7 +6,7 @@ PATH = '/net/gs/vol1/home/abie/bednet_stock_and_flow/'
 CSV_NAME = 'output.csv'
 
 # set TESTING to True to speed up all calculations (and make them much less accurate)
-TESTING = True
+TESTING = False
 
 # Use 2000 samples for final uncertainty estimates;  50 will be enough for refining model/priors
 #NUM_SAMPLES = 50

@@ -7,7 +7,6 @@ from pymc import *
 import time
 import copy
 
-import data
 import settings
 
 def plot_discard_prior(pi, discard_prior):
@@ -303,7 +302,7 @@ def plot_neg_binom_fits():
 def plot_posterior(c_id, c, pop,
                    s_m, s_d, e_d, pi, nm, nd, W, H, Hprime, s_r_c, eta, alpha, s_rb,
                    manufacturing_obs, admin_distribution_obs, household_distribution_obs,
-                   itn_coverage, llin_coverage, hh_itn):
+                   itn_coverage, llin_coverage, hh_itn, data):
     from settings import year_start, year_end
     
     ### setup the canvas for our plots
@@ -366,7 +365,8 @@ def plot_posterior(c_id, c, pop,
         x = array([float(d['Year']) for d in data_list if d[country_key] == c])
         errorbar(x + offset,
                  data_val/scale,
-                 error_val/scale, fmt=fmt, alpha=.95, label=label)
+                 error_val/scale, fmt=fmt, alpha=.75, label=label,
+                 markersize=20)
 
     def stoch_max(stoch):
         return max(stoch.stats()['95% HPD interval'][:,1])
@@ -528,6 +528,8 @@ def plot_posterior(c_id, c, pop,
                  fmt='bs', scale=.01)
     scatter_data(data.itn_coverage, c, 'Country', 'coverage', 'coverage_se',
                  fmt='r^', scale=.01)
+    scatter_data(data.holdout_itn_coverage, c, 'Country', 'coverage', 'coverage_se',
+                 fmt='c^', scale=.01)
     decorate_figure(ystr='At least one net (%)', ymax=80)
 
     subplot(rows, cols/2, 3*(cols/2)+1)

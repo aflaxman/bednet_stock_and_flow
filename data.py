@@ -40,88 +40,113 @@ def load_csv(fname):
 
     return data
 
-### load all data from csv files
-retention = load_csv('reten.csv')
-design = load_csv('design.csv')
+class Data:
+    def __init__(self):
+        ### load all data from csv files
+        self.retention = load_csv('reten.csv')
+        self.design = load_csv('design.csv')
 
-llin_manu = load_csv('manuitns.csv')
-admin_llin = load_csv('adminllins_itns.csv')
+        self.llin_manu = load_csv('manuitns.csv')
+        self.admin_llin = load_csv('adminllins_itns.csv')
 
-hh_llin_stock = load_csv('stock_llins.csv')
-hh_llin_flow = load_csv('flow_llins.csv')
+        self.hh_llin_stock = load_csv('stock_llins.csv')
+        self.hh_llin_flow = load_csv('flow_llins.csv')
 
-# add mean survey date to hh_llin data
-for d in hh_llin_stock + hh_llin_flow:
-    mean_survey_date = time.strptime(d['Mean_SvyDate'], '%d-%b-%y')
-    d['mean_survey_date'] = mean_survey_date[0] + mean_survey_date[1]/12.
+        # add mean survey date to hh_llin data
+        for d in self.hh_llin_stock + self.hh_llin_flow:
+            mean_survey_date = time.strptime(d['Mean_SvyDate'], '%d-%b-%y')
+            d['mean_survey_date'] = mean_survey_date[0] + mean_survey_date[1]/12.
 
-llin_coverage = load_csv('llincc.csv')
-itn_coverage = load_csv('itncc.csv')
+        self.llin_coverage = load_csv('llincc.csv')
+        self.itn_coverage = load_csv('itncc.csv')
+        self.holdout_itn_coverage = []
 
-llin_num = load_csv('numllins.csv')
+        self.llin_num = load_csv('numllins.csv')
 
-population = load_csv('pop.csv')
+        self.population = load_csv('pop.csv')
 
-countries = set([d['Country'] for d in population])
+        self.countries = set([d['Country'] for d in self.population])
 
-def population_for(c, year_start, year_end):
-    pop_vec = zeros(year_end - year_start)
-    for d in population:
-        if d['Country'] == c:
-            pop_vec[int(d['Year']) - year_start] = d['Pop']*1000
+    def population_for(self, c, year_start, year_end):
+        pop_vec = zeros(year_end - year_start)
+        for d in self.population:
+            if d['Country'] == c:
+                pop_vec[int(d['Year']) - year_start] = d['Pop']*1000
 
-    # since we might be predicting into the future, fill in population with last existing value
-    for ii in range(1, year_end-year_start):
-        if pop_vec[ii] == 0.:
-            pop_vec[ii] = pop_vec[ii-1]
+        # since we might be predicting into the future, fill in population with last existing value
+        for ii in range(1, year_end-year_start):
+            if pop_vec[ii] == 0.:
+                pop_vec[ii] = pop_vec[ii-1]
 
-    return pop_vec
+        return pop_vec
 
-def add_synthetic_data():
-    # find population by country-year
-    pop = {}
-    for d in population:
-        pop[(d['Country'], d['Year'])] = d['Pop'] * 1000.
+    def holdout(self, holdout_frac=.2):
+        """ choose a pseudo-random subset of itn coverage data to use for
+        measuring predictive validity"""
+        from numpy import sqrt
+        import random
+        random.seed(12345)
 
-    # find mean LLINs manu and dist per capita by year
-    manu = [[] for y in range(settings.year_start, settings.year_end)]
-    for d in llin_manu:
-        if pop.has_key((d['Country'], d['Year'])):
-            manu[int(d['Year']-settings.year_start)].append(
-                d['Manu_Itns'] / pop[(d['Country'], d['Year'])])
+        self.holdout_itn_coverage = random.sample(self.itn_coverage,
+                                                  int(holdout_frac * len(self.itn_coverage)))
+        self.itn_coverage = [d for d in self.itn_coverage if not d in self.holdout_itn_coverage]
 
-    mu_manu = zeros(len(manu))
-    for ii in range(settings.year_end - settings.year_start):
-        if manu[ii]:
-            mu_manu[ii] = mean(manu[ii])
-    mu_manu += .005
+        for d in self.holdout_itn_coverage:
+            try:
+                mean_survey_date = time.strptime(d['Mean_SvyDate'], '%d-%b-%y')
+                d['Year'] = mean_survey_date[0] + mean_survey_date[1]/12.
+            except ValueError:
+                d['Year'] = d['Survey_Year1'] + .5
+            d['coverage'] = 1. - float(d['Per_0ITNs'])
+            N = d['Total_HH'] or 1000
+            d['sampling_error'] = d['coverage']*(1-d['coverage'])/sqrt(N)
+            d['coverage_se'] = d['sampling_error']*2.
 
-    dist = [[] for y in range(settings.year_start, settings.year_end)]
-    for d in hh_llin_flow:
-        if pop.has_key((d['Country'], d['Year'])):
-            dist[int(d['Year']-settings.year_start)].append(
-                d['Total_LLINs'] / pop[(d['Country'], d['Year'])])
+    def add_synthetic_data(self):
+        # find population by country-year
+        pop = {}
+        for d in self.population:
+            pop[(d['Country'], d['Year'])] = d['Pop'] * 1000.
 
-    mu_dist = zeros(len(dist))
-    for ii in range(settings.year_end - settings.year_start):
-        if dist[ii]:
-            mu_dist[ii] = mean(dist[ii])
+        # find mean LLINs manu and dist per capita by year
+        manu = [[] for y in range(settings.year_start, settings.year_end)]
+        for d in self.llin_manu:
+            if pop.has_key((d['Country'], d['Year'])):
+                manu[int(d['Year']-settings.year_start)].append(
+                    d['Manu_Itns'] / pop[(d['Country'], d['Year'])])
+
+        mu_manu = zeros(len(manu))
+        for ii in range(settings.year_end - settings.year_start):
+            if manu[ii]:
+                mu_manu[ii] = mean(manu[ii])
+        mu_manu += .005
+
+        dist = [[] for y in range(settings.year_start, settings.year_end)]
+        for d in self.hh_llin_flow:
+            if pop.has_key((d['Country'], d['Year'])):
+                dist[int(d['Year']-settings.year_start)].append(
+                    d['Total_LLINs'] / pop[(d['Country'], d['Year'])])
+
+        mu_dist = zeros(len(dist))
+        for ii in range(settings.year_end - settings.year_start):
+            if dist[ii]:
+                mu_dist[ii] = mean(dist[ii])
 
 
-    mu = mu_manu * 1000000
-    delta = mu_dist * 1000000
+        mu = mu_manu * 1000000
+        delta = mu_dist * 1000000
 
-    Psi = zeros(len(mu))
-    Th1 = zeros(len(mu))
-    Th2 = zeros(len(mu))
-    Th3 = zeros(len(mu))
-    Th4 = zeros(len(mu))
+        Psi = zeros(len(mu))
+        Th1 = zeros(len(mu))
+        Th2 = zeros(len(mu))
+        Th3 = zeros(len(mu))
+        Th4 = zeros(len(mu))
 
-    for ii in range(0,len(mu)-1):
-        Psi[ii+1] = Psi[ii] + mu[ii] - delta[ii]
-        Th1[ii+1] = delta[ii]
-        Th2[ii+1] = Th1[ii]
-        Th3[ii+1] = Th2[ii]
-        Th4[ii+1] = Th3[ii]
-            
-    return mu, delta, Psi, Th1, Th2, Th3, Th4, Th1+Th2+Th3+Th4
+        for ii in range(0,len(mu)-1):
+            Psi[ii+1] = Psi[ii] + mu[ii] - delta[ii]
+            Th1[ii+1] = delta[ii]
+            Th2[ii+1] = Th1[ii]
+            Th3[ii+1] = Th2[ii]
+            Th4[ii+1] = Th3[ii]
+
+        return mu, delta, Psi, Th1, Th2, Th3, Th4, Th1+Th2+Th3+Th4

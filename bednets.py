@@ -12,7 +12,9 @@ import time
 import optparse
 import random
 
-import data
+from data import Data
+data = Data()
+
 import emp_priors
 import graphics
 
@@ -156,8 +158,8 @@ def main(country_id, itn_composition_std):
     except TypeError:
         itn_composition_std = .25
     @potential
-    def itn_composition(Theta_llin=Theta, Theta_non_llin=Omega, tau=itn_composition_std**-2):
-        frac_llin = Theta_llin / (Theta_llin + Theta_non_llin)
+    def itn_composition(llin=Theta, non_llin=Omega, tau=itn_composition_std**-2):
+        frac_llin = llin / (llin + non_llin)
         return normal_like(frac_llin[[0,1,2,-5,-4,-3,-2,-1]], [0., 0., 0., 1., 1., 1., 1., 1.], tau)
     vars += [proven_capacity, itn_composition]
 
@@ -458,13 +460,15 @@ def main(country_id, itn_composition_std):
     graphics.plot_posterior(country_id, c, pop,
                             s_m, s_d, e_d, pi, mu, delta, Psi, Theta, Omega, gamma, eta, alpha, s_rb,
                             manufacturing_obs, admin_distribution_obs, household_distribution_obs,
-                            itn_coverage, llin_coverage, itns_owned)
+                            itn_coverage, llin_coverage, itns_owned, data)
 
 if __name__ == '__main__':
     usage = 'usage: %prog [options] country_id'
     parser = optparse.OptionParser(usage)
     parser.add_option('-c', '--composition', dest='itn_composition_std',
                       help='standard deviation for itn composition prior (default is 0.5)')
+    parser.add_option('-v', '--validate', dest='holdout_frac',
+                      help='fraction of itn data to holdout for cross validation')
     (options, args) = parser.parse_args()
 
     if len(args) != 1:
@@ -474,5 +478,8 @@ if __name__ == '__main__':
             country_id = int(args[0])
         except ValueError:
             parser.error('country_id must be an integer')
+
+        if options.holdout_frac:
+            data.holdout(float(options.holdout_frac))
 
         main(country_id, options.itn_composition_std)
