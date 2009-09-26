@@ -72,7 +72,7 @@ def main(country_id, itn_composition_std):
 
     mu_Omega = .001 * pop
     log_Omega = Normal('log(non-llin household net stock)',
-                        mu=log(mu_h_prime), tau=2.5**-2, value=log(mu_Omega))
+                        mu=log(mu_Omega), tau=2.5**-2, value=log(mu_Omega))
     Omega = Lambda('non-llin household net stock', lambda x=log_Omega: exp(x))
 
     vars += [log_delta, delta, log_mu, mu, log_Omega, Omega]
