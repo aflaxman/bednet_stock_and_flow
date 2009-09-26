@@ -9,8 +9,8 @@ CSV_NAME = 'output.csv'
 TESTING = False
 
 # Use 2000 samples for final uncertainty estimates;  50 will be enough for refining model/priors
-#NUM_SAMPLES = 50
-NUM_SAMPLES = 2000
+NUM_SAMPLES = 50
+#NUM_SAMPLES = 2000
 THIN = 2500
 BURN = 250000
 #METHOD = 'NormApprox'

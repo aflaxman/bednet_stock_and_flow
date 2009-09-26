@@ -65,7 +65,8 @@ def main(country_id, itn_composition_std):
 
     mu_N = where(arange(year_start, year_end) <= 2003, .00005, .001) * pop
     std_N = where(arange(year_start, year_end) <= 2003, .25, 2.5)
-    
+
+    # TODO: test chain that changes diff(log_delta) instead of log_delta, might mix more rapidly
     log_delta = Normal('log(llins distributed)', mu=log(mu_N), tau=std_N**-2, value=log(mu_N))
     delta = Lambda('llins distributed', lambda x=log_delta: exp(x))
 
@@ -156,7 +157,7 @@ def main(country_id, itn_composition_std):
     try:
         itn_composition_std = float(itn_composition_std)
     except TypeError:
-        itn_composition_std = .25
+        itn_composition_std = .5
     @potential
     def itn_composition(llin=Theta, non_llin=Omega, tau=itn_composition_std**-2):
         frac_llin = llin / (llin + non_llin)
@@ -424,6 +425,7 @@ def main(country_id, itn_composition_std):
                     'LLINs Not Owned Warehouse (Thousands)', 'LLINs Not Owned Lower CI', 'LLINs Not Owned Upper CI',
                     'LLINs Owned (Thousands)', 'LLINs Owned Lower CI', 'LLINs Owned Upper CI',
                     'non-LLIN ITNs Owned (Thousands)', 'non-LLIN ITNs Owned Lower CI', 'non-LLIN ITNs Owned Upper CI',
+                    'ITNs Owned (Thousands)', 'ITNs Owned Lower CI', 'ITNs Owned Upper CI',
                     'LLIN Coverage (Percent)', 'LLIN Coverage Lower CI', 'LLIN Coverage Upper CI',
                     'ITN Coverage (Percent)', 'ITN Coverage Lower CI', 'ITN Coverage Upper CI']
 
@@ -451,6 +453,7 @@ def main(country_id, itn_composition_std):
         val += [Psi.stats()['mean'][t]/1000] + list(Psi.stats()['95% HPD interval'][t]/1000)
         val += [Theta.stats()['mean'][t]/1000] + list(Theta.stats()['95% HPD interval'][t]/1000)
         val += [Omega.stats()['mean'][t]/1000] + list(Omega.stats()['95% HPD interval'][t]/1000)
+        val += [itns_owned.stats()['mean'][t]/1000] + list(itns_owned.stats()['95% HPD interval'][t]/1000)
         val += [100*llin_coverage.stats()['mean'][t]] + list(100*llin_coverage.stats()['95% HPD interval'][t])
         val += [100*itn_coverage.stats()['mean'][t]] + list(100*itn_coverage.stats()['95% HPD interval'][t])
         f.write(','.join(['%.2f']*(len(col_headings)-3)) % tuple(val))
