@@ -63,6 +63,7 @@ def plot_discard_prior(pi, discard_prior):
     title('Annual Risk of LLIN Loss')
 
     savefig('discard_prior.png')
+    savefig('discard_prior.eps')
 
 def plot_survey_design_prior(design_prior, data_vals):
     """ Generate a plot of the empirical prior for survey design effect
@@ -94,6 +95,7 @@ def plot_survey_design_prior(design_prior, data_vals):
     title('Survey Design Effect')
 
     savefig('survey_design_effect_prior.png')
+    savefig('survey_design_effect_prior.eps')
 
     
 def plot_admin_priors(eps, sigma, admin_priors, data_dict):
@@ -149,6 +151,7 @@ def plot_admin_priors(eps, sigma, admin_priors, data_dict):
     title('Error in Admin LLIN flow')
 
     savefig('admin_priors.png')
+    savefig('admin_priors.eps')
 
     figure(figsize=(8.5,8.5), dpi=settings.DPI)
 
@@ -184,6 +187,7 @@ def plot_admin_priors(eps, sigma, admin_priors, data_dict):
     #    text(d['truth'], d['obs'], ' %s, %s' % k, fontsize=12, alpha=.5, verticalalignment='center')
 
     savefig('admin_scatter.png')
+    savefig('admin_scatter.eps')
 
 
 def plot_neg_binom_priors(eta, alpha, factor_priors, data_dict):
@@ -241,6 +245,7 @@ def plot_neg_binom_priors(eta, alpha, factor_priors, data_dict):
     ylabel('probability density')
     
     savefig('neg_binom_priors.png')
+    savefig('neg_binom_priors.eps')
 
 def plot_neg_binom_fits():
     """ Generate figure that demonstrates how suitable the
@@ -293,6 +298,7 @@ def plot_neg_binom_fits():
             
         axis([0, 4, .1, 100])
     savefig('neg_binom_fits.png')
+    savefig('neg_binom_fits.eps')
     
 def plot_posterior(c_id, c, pop,
                    s_m, s_d, e_d, pi, nm, nd, W, H, Hprime, s_r_c, eta, alpha, s_rb,
@@ -365,7 +371,7 @@ def plot_posterior(c_id, c, pop,
     def stoch_max(stoch):
         return max(stoch.stats()['95% HPD interval'][:,1])
 
-    def decorate_figure(ystr='# of Nets (Millions)', ymax=False):
+    def decorate_figure(ystr='# of Nets (Per Capita)', ymax=False):
         """ Set the axis, etc."""
         l,r,b,t = axis()
         if ymax:

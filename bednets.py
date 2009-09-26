@@ -16,7 +16,7 @@ import data
 import emp_priors
 import graphics
 
-def main(country_id, smooth_nonllin_stock_std, itn_composition_std):
+def main(country_id, itn_composition_std):
     from settings import year_start, year_end
 
     c = sorted(data.countries)[country_id]
@@ -51,8 +51,8 @@ def main(country_id, smooth_nonllin_stock_std, itn_composition_std):
     vars += [eta, alpha]
 
     prior = emp_priors.survey_design()
-    s_r_c = Normal('survey design factor for coverage data', prior['mu'], prior['tau'])
-    vars += [s_r_c]
+    gamma = Normal('survey design factor for coverage data', prior['mu'], prior['tau'])
+    vars += [gamma]
 
     # Fully Bayesian priors
     s_m = Lognormal('error in llin ship', log(.1), .5**-2, value=.1)
@@ -64,108 +64,100 @@ def main(country_id, smooth_nonllin_stock_std, itn_composition_std):
     mu_N = where(arange(year_start, year_end) <= 2003, .00005, .001) * pop
     std_N = where(arange(year_start, year_end) <= 2003, .25, 2.5)
     
-    log_nd = Normal('log(llins distributed)', mu=log(mu_N), tau=std_N**-2, value=log(mu_N))
-    nd = Lambda('llins distributed', lambda x=log_nd: exp(x))
+    log_delta = Normal('log(llins distributed)', mu=log(mu_N), tau=std_N**-2, value=log(mu_N))
+    delta = Lambda('llins distributed', lambda x=log_delta: exp(x))
 
-    log_nm = Normal('log(llins shipped)', mu=log(mu_N), tau=std_N**-2, value=log(mu_N))
-    nm = Lambda('llins shipped', lambda x=log_nm: exp(x))
+    log_mu = Normal('log(llins shipped)', mu=log(mu_N), tau=std_N**-2, value=log(mu_N))
+    mu = Lambda('llins shipped', lambda x=log_mu: exp(x))
 
-    mu_h_prime = .001 * pop
-    log_Hprime = Normal('log(non-llin household net stock)',
-                        mu=log(mu_h_prime), tau=3.**-2, value=log(mu_h_prime))
-    Hprime = Lambda('non-llin household net stock', lambda x=log_Hprime: exp(x))
+    mu_Omega = .001 * pop
+    log_Omega = Normal('log(non-llin household net stock)',
+                        mu=log(mu_h_prime), tau=2.5**-2, value=log(mu_Omega))
+    Omega = Lambda('non-llin household net stock', lambda x=log_Omega: exp(x))
 
-    vars += [log_nd, nd, log_nm, nm, log_Hprime, Hprime]
+    vars += [log_delta, delta, log_mu, mu, log_Omega, Omega]
 
     @deterministic(name='llin warehouse net stock')
-    def W(nm=nm, nd=nd):
-        W = zeros(year_end-year_start)
+    def Psi(mu=mu, delta=delta):
+        Psi = zeros(year_end-year_start)
         for t in range(year_end - year_start - 1):
-            W[t+1] = W[t] + nm[t] - nd[t]
-        return W
+            Psi[t+1] = Psi[t] + mu[t] - delta[t]
+        return Psi
 
     @deterministic(name='1-year-old household llin stock')
-    def H1(nd=nd):
-        H1 = zeros(year_end-year_start)
-        H1[1:] = nd[:-1]
-        return H1
+    def Theta1(delta=delta):
+        Theta1 = zeros(year_end-year_start)
+        Theta1[1:] = delta[:-1]
+        return Theta1
 
     @deterministic(name='2-year-old household llin stock')
-    def H2(H1=H1, pi=pi):
-        H2 = zeros(year_end-year_start)
-        H2[1:] = H1[:-1] * (1 - pi) ** .5
-        return H2
+    def Theta2(Theta1=Theta1, pi=pi):
+        Theta2 = zeros(year_end-year_start)
+        Theta2[1:] = Theta1[:-1] * (1 - pi) ** .5
+        return Theta2
 
     @deterministic(name='3-year-old household llin stock')
-    def H3(H2=H2, pi=pi):
-        H3 = zeros(year_end-year_start)
-        H3[1:] = H2[:-1] * (1  - pi)
-        return H3
+    def Theta3(Theta2=Theta2, pi=pi):
+        Theta3 = zeros(year_end-year_start)
+        Theta3[1:] = Theta2[:-1] * (1  - pi)
+        return Theta3
 
     @deterministic(name='4-year-old household llin stock')
-    def H4(H3=H3, pi=pi):
-        H4 = zeros(year_end-year_start)
-        H4[1:] = H3[:-1] * (1 - pi)
-        return H4
+    def Theta4(Theta3=Theta3, pi=pi):
+        Theta4 = zeros(year_end-year_start)
+        Theta4[1:] = Theta3[:-1] * (1 - pi)
+        return Theta4
 
     @deterministic(name='household llin stock')
-    def H(H1=H1, H2=H2, H3=H3, H4=H4):
-        return H1 + H2 + H3 + H4
+    def Theta(Theta1=Theta1, Theta2=Theta2, Theta3=Theta3, Theta4=Theta4):
+        return Theta1 + Theta2 + Theta3 + Theta4
 
     @deterministic(name='household itn stock')
-    def hh_itn(H=H, Hprime=Hprime):
-        return H + Hprime
+    def itns_owned(Theta=Theta, Omega=Omega):
+        return Theta + Omega
 
     @deterministic(name='llin coverage')
-    def llin_coverage(H=H, pop=pop,
+    def llin_coverage(Theta=Theta, pop=pop,
                       eta=eta, alpha=alpha):
-        return 1. - (alpha / (eta*H/pop + alpha))**alpha
+        return 1. - (alpha / (eta*Theta/pop + alpha))**alpha
 
     @deterministic(name='itn coverage')
-    def itn_coverage(llin=H, non_llin=Hprime, pop=pop,
+    def itn_coverage(llin=Theta, non_llin=Omega, pop=pop,
                      eta=eta, alpha=alpha):
         return 1. - (alpha / (eta*(llin + non_llin)/pop + alpha))**alpha
 
-    vars += [W, H, H1, H2, H3, H4, hh_itn, llin_coverage, itn_coverage]
+    vars += [Psi, Theta, Theta1, Theta2, Theta3, Theta4, itns_owned, llin_coverage, itn_coverage]
 
     # set initial conditions on nets manufactured to have no stockouts
-    if min(W.value) < 0:
-        log_nm.value = log(nm.value - 2*min(W.value))
+    if min(Psi.value) < 0:
+        log_mu.value = log(mu.value - 2*min(Psi.value))
 
        #####################
       ### additional priors
      ###
     #####################
-    try:
-        smooth_nonllin_stock_std = float(smooth_nonllin_stock_std)
-    except TypeError:
-        smooth_nonllin_stock_std = 1.
     @potential
-    def smooth_stocks(W=W, H=H, Hprime=Hprime, tau=smooth_nonllin_stock_std**-2):
-        return normal_like(diff(log(maximum(Hprime,1))), 0., tau)
-
-    @potential
-    def positive_stocks(H=H, W=W, Hprime=Hprime):
-        if any(W < 0) or any(H < 0) or any(Hprime < 0):
-            return sum(minimum(W,0)) + sum(minimum(H, 0)) + sum(minimum(Hprime, 0))
+    def positive_stocks(Theta=Theta, Psi=Psi, Omega=Omega):
+        if any(Psi < 0) or any(Theta < 0) or any(Omega < 0):
+            return sum(minimum(Psi,0)) + sum(minimum(Theta, 0)) + sum(minimum(Omega, 0))
         else:
             return 0.
-    vars += [smooth_stocks, positive_stocks]
+    vars += [positive_stocks]
 
     @potential
-    def proven_capacity(nd=nd, Hprime=Hprime):
-        total_dist = nd + Hprime
-        max_log_d = log(maximum(1.,[max(total_dist[:(i+1)]) for i in range(len(nd))]))
+    def proven_capacity(delta=delta, Omega=Omega):
+        total_dist = delta + Omega
+        max_log_d = log(maximum(1.,[max(total_dist[:(i+1)]) for i in range(len(total_dist))]))
         amt_below_cap = minimum(log(maximum(total_dist,1.)) - max_log_d, 0.)
         return normal_like(amt_below_cap, 0., .25**-2)
 
     try:
         itn_composition_std = float(itn_composition_std)
     except TypeError:
-        itn_composition_std = .5
+        itn_composition_std = .25
     @potential
-    def itn_composition(H_llin=H, H_non_llin=Hprime, tau=itn_composition_std**-2):
-        frac_llin = H_llin / (H_llin + H_non_llin)
+    def itn_composition(Theta_llin=Theta, Theta_non_llin=Omega, tau=itn_composition_std**-2):
+        frac_llin = Theta_llin / (Theta_llin + Theta_non_llin)
         return normal_like(frac_llin[[0,1,2,-5,-4,-3,-2,-1]], [0., 0., 0., 1., 1., 1., 1., 1.], tau)
     vars += [proven_capacity, itn_composition]
 
@@ -185,14 +177,14 @@ def main(country_id, smooth_nonllin_stock_std, itn_composition_std):
 
         @observed
         @stochastic(name='manufactured_%s_%s' % (d['Country'], d['Year']))
-        def obs(value=float(d['Manu_Itns']), year=int(d['Year']), nm=nm, s_m=s_m):
-            return normal_like(log(value),  log(max(1., nm[year - year_start])), 1. / s_m**2)
+        def obs(value=float(d['Manu_Itns']), year=int(d['Year']), mu=mu, s_m=s_m):
+            return normal_like(log(value),  log(max(1., mu[year - year_start])), 1. / s_m**2)
         manufacturing_obs.append(obs)
 
         # also take this opportinuty to set better initial values for the MCMC
-        cur_val = copy.copy(nm.value)
+        cur_val = copy.copy(mu.value)
         cur_val[int(d['Year']) - year_start] = min(d['Manu_Itns'], 10.)
-        log_nm.value = log(cur_val)
+        log_mu.value = log(cur_val)
 
     vars += [manufacturing_obs]
 
@@ -208,14 +200,14 @@ def main(country_id, smooth_nonllin_stock_std, itn_composition_std):
         @observed
         @stochastic(name='administrative_distribution_%s_%s' % (d['Country'], d['Year']))
         def obs(value=d['Program_LLINs'], year=int(d['Year']),
-                nd=nd, s_d=s_d, e_d=e_d):
-            return normal_like(log(value), e_d + log(max(1., nd[year - year_start])), 1. / s_d**2)
+                delta=delta, s_d=s_d, e_d=e_d):
+            return normal_like(log(value), e_d + log(max(1., delta[year - year_start])), 1. / s_d**2)
         admin_distribution_obs.append(obs)
 
         # also take this opportinuty to set better initial values for the MCMC
-        cur_val = copy.copy(nd.value)
+        cur_val = copy.copy(delta.value)
         cur_val[int(d['Year']) - year_start] = d['Program_LLINs']
-        log_nd.value = log(cur_val)
+        log_delta.value = log(cur_val)
 
     vars += [admin_distribution_obs]
 
@@ -235,17 +227,17 @@ def main(country_id, smooth_nonllin_stock_std, itn_composition_std):
                 estimate_year=estimate_year,
                 survey_year=survey_year,
                 survey_err=s_d2_i,
-                nd=nd, pi=pi, s_rb=s_rb):
+                delta=delta, pi=pi, s_rb=s_rb):
             return normal_like(
                 value,
-                nd[estimate_year - year_start] * (1 - pi) ** (survey_year - estimate_year - .5),
+                delta[estimate_year - year_start] * (1 - pi) ** (survey_year - estimate_year - .5),
                 1./ (survey_err*(1+s_rb))**2)
         household_distribution_obs.append(obs)
 
         # also take this opportinuty to set better initial values for the MCMC
-        cur_val = copy.copy(nd.value)
+        cur_val = copy.copy(delta.value)
         cur_val[estimate_year - year_start] = d2_i / (1 - pi.value)**(survey_year - estimate_year - .5)
-        log_nd.value = log(cur_val)
+        log_delta.value = log(cur_val)
 
     vars += [household_distribution_obs]
 
@@ -263,10 +255,10 @@ def main(country_id, smooth_nonllin_stock_std, itn_composition_std):
         def obs(value=d['SvyIndex_LLINstotal'],
                 year=d['Year'],
                 std_err=d['SvyIndex_st'],
-                H=H):
+                Theta=Theta):
             year_part = year-floor(year)
-            H_i = (1-year_part) * H[floor(year)-year_start] + year_part * H[ceil(year)-year_start]
-            return normal_like(value, H_i, 1. / std_err**2)
+            Theta_i = (1-year_part) * Theta[floor(year)-year_start] + year_part * Theta[ceil(year)-year_start]
+            return normal_like(value, Theta_i, 1. / std_err**2)
         household_stock_obs.append(obs)
 
     vars += [household_stock_obs]
@@ -297,14 +289,14 @@ def main(country_id, smooth_nonllin_stock_std, itn_composition_std):
             d['coverage'] = 1. - float(d['Per_0LLINs'])
             N = d['Total_HH'] or 1000
             d['sampling_error'] = d['coverage']*(1-d['coverage'])/sqrt(N)
-            d['coverage_se'] = d['sampling_error']*s_r_c.value
+            d['coverage_se'] = d['sampling_error']*gamma.value
             d['Year'] = d['Survey_Year1'] + .5
             @observed
             @stochastic(name='LLIN_Coverage_Imputation_%s_%s' % (d['Country'], d['Year']))
             def obs(value=d['coverage'],
                     year=d['Year'],
                     sampling_error=d['sampling_error'],
-                    design_factor=s_r_c,
+                    design_factor=gamma,
                     coverage=llin_coverage):
                 year_part = year-floor(year)
                 coverage_i = (1-year_part) * coverage[floor(year)-year_start] + year_part * coverage[ceil(year)-year_start]
@@ -336,13 +328,13 @@ def main(country_id, smooth_nonllin_stock_std, itn_composition_std):
             d['Year'] = d['Survey_Year1'] + .5
             N = d['Total_HH'] or 1000
             d['sampling_error'] = d['coverage']*(1-d['coverage'])/sqrt(N)
-            d['coverage_se'] = d['sampling_error']*s_r_c.value
+            d['coverage_se'] = d['sampling_error']*gamma.value
             @observed
             @stochastic(name='ITN_Coverage_Report_%s_%s' % (d['Country'], d['Year']))
             def obs(value=d['coverage'],
                     year=d['Year'],
                     sampling_error=d['sampling_error'],
-                    design_factor=s_r_c,
+                    design_factor=gamma,
                     coverage=itn_coverage):
                 year_part = year-floor(year)
                 coverage_i = (1-year_part) * coverage[floor(year)-year_start] + year_part * coverage[ceil(year)-year_start]
@@ -353,9 +345,9 @@ def main(country_id, smooth_nonllin_stock_std, itn_composition_std):
 
         # also take this opportinuty to set better initial values for the MCMC
         t = floor(d['Year'])-year_start
-        cur_val = copy.copy(Hprime.value)
-        cur_val[t] = max(.0001*pop[t], log(1-d['coverage']) * pop[t] / eta.value - H.value[t])
-        log_Hprime.value = log(cur_val)
+        cur_val = copy.copy(Omega.value)
+        cur_val[t] = max(.0001*pop[t], log(1-d['coverage']) * pop[t] / eta.value - Theta.value[t])
+        log_Omega.value = log(cur_val)
 
     vars += [coverage_obs]
 
@@ -372,19 +364,19 @@ def main(country_id, smooth_nonllin_stock_std, itn_composition_std):
         map.fit(method='fmin', iterlim=100, verbose=1)
     else:
         # just optimize some variables, to get reasonable initial conditions
-        map = MAP([log_nm,
-                   smooth_stocks, positive_stocks,
+        map = MAP([log_mu,
+                   positive_stocks,
                    manufacturing_obs])
         map.fit(method='fmin_powell', verbose=1)
 
-        map = MAP([log_nd,
-                   smooth_stocks, positive_stocks,
+        map = MAP([log_delta,
+                   positive_stocks,
                    admin_distribution_obs, household_distribution_obs,
                    household_stock_obs])
         map.fit(method='fmin_powell', verbose=1)
 
-        map = MAP([log_nm, log_nd, log_Hprime,
-                   smooth_stocks, positive_stocks, itn_composition,
+        map = MAP([log_mu, log_delta, log_Omega,
+                   positive_stocks, itn_composition,
                    coverage_obs])
         map.fit(method='fmin_powell', verbose=1)
 
@@ -393,10 +385,10 @@ def main(country_id, smooth_nonllin_stock_std, itn_composition_std):
 
     if settings.METHOD == 'MCMC':
         mc = MCMC(vars, verbose=1)
-        #mc.use_step_method(AdaptiveMetropolis, [log_nd, log_nm, log_Hprime])
-        mc.use_step_method(Metropolis, log_nd)
-        mc.use_step_method(Metropolis, log_nm)
-        #mc.use_step_method(Metropolis, log_Hprime)
+        #mc.use_step_method(AdaptiveMetropolis, [log_delta, log_mu, log_Omega])
+        mc.use_step_method(Metropolis, log_delta)
+        mc.use_step_method(Metropolis, log_mu)
+        #mc.use_step_method(Metropolis, log_Omega)
         mc.use_step_method(NoStepper, [eta, alpha])
         mc.use_step_method(NoStepper, [s_m, s_rb])
 
@@ -427,7 +419,7 @@ def main(country_id, smooth_nonllin_stock_std, itn_composition_std):
     col_headings = ['Country', 'Year', 'Population',
                     'LLINs Shipped (Thousands)', 'LLINs Shipped Lower CI', 'LLINs Shipped Upper CI',
                     'LLINs Distributed (Thousands)', 'LLINs Distributed Lower CI', 'LLINs Distributed Upper CI',
-                    'LLINs in Warehouse (Thousands)', 'LLINs in Warehouse Lower CI', 'LLINs in Warehouse Upper CI',
+                    'LLINs Not Owned Warehouse (Thousands)', 'LLINs Not Owned Lower CI', 'LLINs Not Owned Upper CI',
                     'LLINs Owned (Thousands)', 'LLINs Owned Lower CI', 'LLINs Owned Upper CI',
                     'non-LLIN ITNs Owned (Thousands)', 'non-LLIN ITNs Owned Lower CI', 'non-LLIN ITNs Owned Upper CI',
                     'LLIN Coverage (Percent)', 'LLIN Coverage Lower CI', 'LLIN Coverage Upper CI',
@@ -452,11 +444,11 @@ def main(country_id, smooth_nonllin_stock_std, itn_composition_std):
             val = [-99, -99, -99]
             val += [-99, -99, -99]
         else:
-            val = [nm.stats()['mean'][t]/1000] + list(nm.stats()['95% HPD interval'][t]/1000)
-            val += [nd.stats()['mean'][t]/1000] + list(nd.stats()['95% HPD interval'][t]/1000)
-        val += [W.stats()['mean'][t]/1000] + list(W.stats()['95% HPD interval'][t]/1000)
-        val += [H.stats()['mean'][t]/1000] + list(H.stats()['95% HPD interval'][t]/1000)
-        val += [Hprime.stats()['mean'][t]/1000] + list(Hprime.stats()['95% HPD interval'][t]/1000)
+            val = [mu.stats()['mean'][t]/1000] + list(mu.stats()['95% HPD interval'][t]/1000)
+            val += [delta.stats()['mean'][t]/1000] + list(delta.stats()['95% HPD interval'][t]/1000)
+        val += [Psi.stats()['mean'][t]/1000] + list(Psi.stats()['95% HPD interval'][t]/1000)
+        val += [Theta.stats()['mean'][t]/1000] + list(Theta.stats()['95% HPD interval'][t]/1000)
+        val += [Omega.stats()['mean'][t]/1000] + list(Omega.stats()['95% HPD interval'][t]/1000)
         val += [100*llin_coverage.stats()['mean'][t]] + list(100*llin_coverage.stats()['95% HPD interval'][t])
         val += [100*itn_coverage.stats()['mean'][t]] + list(100*itn_coverage.stats()['95% HPD interval'][t])
         f.write(','.join(['%.2f']*(len(col_headings)-3)) % tuple(val))
@@ -464,15 +456,13 @@ def main(country_id, smooth_nonllin_stock_std, itn_composition_std):
     f.close()
 
     graphics.plot_posterior(country_id, c, pop,
-                            s_m, s_d, e_d, pi, nm, nd, W, H, Hprime, s_r_c, eta, alpha, s_rb,
+                            s_m, s_d, e_d, pi, mu, delta, Psi, Theta, Omega, gamma, eta, alpha, s_rb,
                             manufacturing_obs, admin_distribution_obs, household_distribution_obs,
-                            itn_coverage, llin_coverage, hh_itn)
+                            itn_coverage, llin_coverage, itns_owned)
 
 if __name__ == '__main__':
     usage = 'usage: %prog [options] country_id'
     parser = optparse.OptionParser(usage)
-    parser.add_option('-s', '--smooth', dest='smooth_nonllin_stock_std',
-                      help='standard deviation for non-llin stock smoothing prior (default is 1.0)')
     parser.add_option('-c', '--composition', dest='itn_composition_std',
                       help='standard deviation for itn composition prior (default is 0.5)')
     (options, args) = parser.parse_args()
@@ -485,4 +475,4 @@ if __name__ == '__main__':
         except ValueError:
             parser.error('country_id must be an integer')
 
-        main(country_id, options.smooth_nonllin_stock_std, options.itn_composition_std)
+        main(country_id, options.itn_composition_std)
