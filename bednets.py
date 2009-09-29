@@ -57,14 +57,14 @@ def main(country_id, itn_composition_std):
     vars += [gamma]
 
     # Fully Bayesian priors
-    s_m = Lognormal('error in llin ship', log(.1), .5**-2, value=.1)
+    s_m = Lognormal('error in llin ship', log(.05), .5**-2, value=.05)
     vars += [s_m]
 
-    s_rb = Lognormal('recall bias factor', log(.1), .5**-2, value=.01)
+    s_rb = Lognormal('recall bias factor', log(.05), .5**-2, value=.05)
     vars += [s_rb]
 
-    mu_N = where(arange(year_start, year_end) <= 2003, .00005, .001) * pop
-    std_N = where(arange(year_start, year_end) <= 2003, .25, 2.5)
+    mu_N = where(arange(year_start, year_end) <= 2003, .0001, .001) * pop
+    std_N = where(arange(year_start, year_end) <= 2003, .2, 2.)
 
     # TODO: test chain that changes diff(log_delta) instead of log_delta, might mix more rapidly
     log_delta = Normal('log(llins distributed)', mu=log(mu_N), tau=std_N**-2, value=log(mu_N))
@@ -171,7 +171,7 @@ def main(country_id, itn_composition_std):
     #####################
 
 
-    ### observed nets manufactured
+    ### nets shipped to country (reported by manufacturers)
 
     manufacturing_obs = []
     for d in data.llin_manu:
@@ -193,7 +193,7 @@ def main(country_id, itn_composition_std):
 
 
 
-    ### observed nets distributed
+    ### nets distributed in country (reported by NMCP)
 
     admin_distribution_obs = []
     for d in data.admin_llin:
@@ -215,15 +215,21 @@ def main(country_id, itn_composition_std):
     vars += [admin_distribution_obs]
 
 
+    ### nets distributed in country (observed in household survey)
+
     household_distribution_obs = []
     for d in data.hh_llin_flow:
         if d['Country'] != c:
             continue
 
-        d2_i = float(d['Total_LLINs'])
+        d2_i = d['Total_LLINs']
         estimate_year = int(d['Year'])
-        survey_year = int(d['Survey_Year2'])
+        
+        mean_survey_date = time.strptime(d['Mean_SvyDate'], '%d-%b-%y')
+        survey_year = mean_survey_date[0] + mean_survey_date[1]/12.
+
         s_d2_i = float(d['Total_st'])
+
         @observed
         @stochastic(name='household_distribution_%s_%s' % (d['Country'], d['Year']))
         def obs(value=d2_i,
@@ -245,7 +251,7 @@ def main(country_id, itn_composition_std):
     vars += [household_distribution_obs]
 
 
-    ### observed household stocks (from survey)
+    ### net stock in households (from survey)
     household_stock_obs = []
     for d in data.hh_llin_stock:
         if d['Country'] != c:
@@ -267,7 +273,7 @@ def main(country_id, itn_composition_std):
     vars += [household_stock_obs]
 
 
-    ### observed coverage 
+    ### llin and itn coverage (from survey and survey reports)
     coverage_obs = []
     for d in data.llin_coverage:
         if d['Country'] != c:
@@ -293,7 +299,10 @@ def main(country_id, itn_composition_std):
             N = d['Total_HH'] or 1000
             d['sampling_error'] = d['coverage']*(1-d['coverage'])/sqrt(N)
             d['coverage_se'] = d['sampling_error']*gamma.value
-            d['Year'] = d['Survey_Year1'] + .5
+
+            mean_survey_date = time.strptime(d['Mean_SvyDate'], '%d-%b-%y')
+            d['Year'] = mean_survey_date[0] + mean_survey_date[1]/12.
+
             @observed
             @stochastic(name='LLIN_Coverage_Imputation_%s_%s' % (d['Country'], d['Year']))
             def obs(value=d['coverage'],
@@ -315,8 +324,10 @@ def main(country_id, itn_composition_std):
 
         if d['ITNs0_SE']: # data from survey, includes standard error
             d['coverage_se'] = d['ITNs0_SE']
+
             mean_survey_date = time.strptime(d['Mean_SvyDate'], '%d-%b-%y')
             d['Year'] = mean_survey_date[0] + mean_survey_date[1]/12.
+
             @observed
             @stochastic(name='ITN_Coverage_%s_%s' % (d['Country'], d['Year']))
             def obs(value=d['coverage'],
@@ -328,10 +339,16 @@ def main(country_id, itn_composition_std):
                 return normal_like(value, coverage_i, 1. / std_err**2)
 
         else: # data from survey report, must calculate standard error
-            d['Year'] = d['Survey_Year1'] + .5
+            try:
+                mean_survey_date = time.strptime(d['Mean_SvyDate'], '%d-%b-%y')
+                d['Year'] = mean_survey_date[0] + mean_survey_date[1]/12.
+            except ValueError:
+                d['Year'] = d['Survey_Year1'] + .5
+
             N = d['Total_HH'] or 1000
             d['sampling_error'] = d['coverage']*(1-d['coverage'])/sqrt(N)
             d['coverage_se'] = d['sampling_error']*gamma.value
+
             @observed
             @stochastic(name='ITN_Coverage_Report_%s_%s' % (d['Country'], d['Year']))
             def obs(value=d['coverage'],
@@ -388,12 +405,20 @@ def main(country_id, itn_composition_std):
 
     if settings.METHOD == 'MCMC':
         mc = MCMC(vars, verbose=1)
-        #mc.use_step_method(AdaptiveMetropolis, [log_delta, log_mu, log_Omega])
-        mc.use_step_method(Metropolis, log_delta)
-        mc.use_step_method(Metropolis, log_mu)
+        # step method for manufacturing related stochs
+        #mc.use_step_method(Metropolis, log_mu)
+        #mc.use_step_method(NoStepper, s_m)
+        mc.use_step_method(AdaptiveMetropolis, [log_mu, s_m])
+
+        # step method for llin distribution related stochs
+        mc.use_step_method(AdaptiveMetropolis, [log_delta, s_rb])
+        #mc.use_step_method(NoStepper, s_rb)
+        #mc.use_step_method(Metropolis, log_delta)
+
+        # step method for stock and coverage related stochs
         #mc.use_step_method(Metropolis, log_Omega)
-        mc.use_step_method(NoStepper, [eta, alpha])
-        mc.use_step_method(NoStepper, [s_m, s_rb])
+        mc.use_step_method(NoStepper, eta)
+        #mc.use_step_method(NoStepper, alpha)
 
         try:
             if settings.TESTING:
@@ -460,6 +485,18 @@ def main(country_id, itn_composition_std):
         f.write('\n')
     f.close()
 
+    f = open('traces/itn_coverage_%s_%d_%s.csv' % (c, country_id, time.strftime('%Y_%m_%d_%H_%M')), 'w')
+    for row in itn_coverage.trace():
+        f.write(','.join(['%.2f' % cell for cell in row]))
+        f.write('\n')
+    f.close()
+
+    f = open('traces/itn_stock_%s_%d_%s.csv' % (c, country_id, time.strftime('%Y_%m_%d_%H_%M')), 'w')
+    for row in itns_owned.trace():
+        f.write(','.join(['%.2f' % cell for cell in row]))
+        f.write('\n')
+    f.close()
+    
     graphics.plot_posterior(country_id, c, pop,
                             s_m, s_d, e_d, pi, mu, delta, Psi, Theta, Omega, gamma, eta, alpha, s_rb,
                             manufacturing_obs, admin_distribution_obs, household_distribution_obs,
