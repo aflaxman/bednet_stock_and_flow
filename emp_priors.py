@@ -9,7 +9,9 @@ from pymc import *
 import simplejson as json
 import os
 
-import data
+from data import Data
+data = Data()
+
 import graphics
 
 

@@ -63,7 +63,8 @@ def main(country_id, itn_composition_std):
     s_rb = Lognormal('recall bias factor', log(.05), .5**-2, value=.05)
     vars += [s_rb]
 
-    mu_N = where(arange(year_start, year_end) <= 2003, .0001, .001) * pop
+    #mu_N = where(arange(year_start, year_end) <= 2003, .0001, .001) * pop
+    mu_N = .0001 * pop
     std_N = where(arange(year_start, year_end) <= 2003, .2, 2.)
 
     # TODO: test chain that changes diff(log_delta) instead of log_delta, might mix more rapidly
@@ -73,9 +74,9 @@ def main(country_id, itn_composition_std):
     log_mu = Normal('log(llins shipped)', mu=log(mu_N), tau=std_N**-2, value=log(mu_N))
     mu = Lambda('llins shipped', lambda x=log_mu: exp(x))
 
-    mu_Omega = .001 * pop
+    mu_Omega = .0001 * pop
     log_Omega = Normal('log(non-llin household net stock)',
-                        mu=log(mu_Omega), tau=2.5**-2, value=log(mu_Omega))
+                        mu=log(mu_Omega), tau=2.**-2, value=log(mu_Omega))
     Omega = Lambda('non-llin household net stock', lambda x=log_Omega: exp(x))
 
     vars += [log_delta, delta, log_mu, mu, log_Omega, Omega]
@@ -147,21 +148,20 @@ def main(country_id, itn_composition_std):
             return 0.
     vars += [positive_stocks]
 
+    proven_capacity_std = .5
     @potential
-    def proven_capacity(delta=delta, Omega=Omega):
+    def proven_capacity(delta=delta, Omega=Omega, tau=proven_capacity_std**-2):
         total_dist = delta + Omega
         max_log_d = log(maximum(1.,[max(total_dist[:(i+1)]) for i in range(len(total_dist))]))
         amt_below_cap = minimum(log(maximum(total_dist,1.)) - max_log_d, 0.)
-        return normal_like(amt_below_cap, 0., .25**-2)
+        return normal_like(amt_below_cap, 0., tau)
 
-    try:
-        itn_composition_std = float(itn_composition_std)
-    except TypeError:
-        itn_composition_std = .5
+    itn_composition_std = 1.
     @potential
     def itn_composition(llin=Theta, non_llin=Omega, tau=itn_composition_std**-2):
         frac_llin = llin / (llin + non_llin)
-        return normal_like(frac_llin[[0,1,2,-5,-4,-3,-2,-1]], [0., 0., 0., 1., 1., 1., 1., 1.], tau)
+        return normal_like(frac_llin[[0,1,2,6,7,8,9,10,11]],
+                           [0., 0., 0., 1., 1., 1., 1., 1., 1.], tau)
     vars += [proven_capacity, itn_composition]
 
 
@@ -407,18 +407,18 @@ def main(country_id, itn_composition_std):
         mc = MCMC(vars, verbose=1)
         # step method for manufacturing related stochs
         #mc.use_step_method(Metropolis, log_mu)
-        #mc.use_step_method(NoStepper, s_m)
-        mc.use_step_method(AdaptiveMetropolis, [log_mu, s_m])
+        mc.use_step_method(NoStepper, s_m)
+        #mc.use_step_method(AdaptiveMetropolis, [log_mu, s_m])
 
         # step method for llin distribution related stochs
-        mc.use_step_method(AdaptiveMetropolis, [log_delta, s_rb])
-        #mc.use_step_method(NoStepper, s_rb)
+        #mc.use_step_method(AdaptiveMetropolis, [log_delta, s_rb])
+        mc.use_step_method(NoStepper, s_rb)
         #mc.use_step_method(Metropolis, log_delta)
 
         # step method for stock and coverage related stochs
         #mc.use_step_method(Metropolis, log_Omega)
         mc.use_step_method(NoStepper, eta)
-        #mc.use_step_method(NoStepper, alpha)
+        mc.use_step_method(NoStepper, alpha)
 
         try:
             if settings.TESTING:
@@ -487,13 +487,13 @@ def main(country_id, itn_composition_std):
 
     f = open('traces/itn_coverage_%s_%d_%s.csv' % (c, country_id, time.strftime('%Y_%m_%d_%H_%M')), 'w')
     for row in itn_coverage.trace():
-        f.write(','.join(['%.2f' % cell for cell in row]))
+        f.write(','.join(['%.4f' % cell for cell in row]))
         f.write('\n')
     f.close()
 
     f = open('traces/itn_stock_%s_%d_%s.csv' % (c, country_id, time.strftime('%Y_%m_%d_%H_%M')), 'w')
     for row in itns_owned.trace():
-        f.write(','.join(['%.2f' % cell for cell in row]))
+        f.write(','.join(['%.4f' % cell for cell in row]))
         f.write('\n')
     f.close()
     

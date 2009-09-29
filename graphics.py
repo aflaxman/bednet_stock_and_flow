@@ -59,7 +59,8 @@ def plot_discard_prior(pi, discard_prior):
     # decorate the figure
     axis([0, .2, 0, t])
     #legend()  # this doesnt work
-    title('Annual Risk of LLIN Loss')
+    xlabel('Annual Risk of LLIN Loss')
+    ylabel('Probability Density')
 
     savefig('discard_prior.png')
     savefig('discard_prior.eps')
@@ -91,7 +92,8 @@ def plot_survey_design_prior(design_prior, data_vals):
          edgecolor='grey', facecolor='cyan', alpha=.75,
          label='posterior')
 
-    title('Survey Design Effect')
+    xlabel('Survey Design Effect')
+    ylabel('Probability Density')
 
     savefig('survey_design_effect_prior.png')
     savefig('survey_design_effect_prior.eps')
@@ -122,7 +124,8 @@ def plot_admin_priors(eps, sigma, admin_priors, data_dict):
          label='empirical prior')
 
     # decorate the figure
-    title('Bias in Admin LLIN flow')
+    xlabel('Bias in Admin LLIN flow')
+    ylabel('Probability Density')
 
     ## plot prior for sigma
     subplot(1,2,2)
@@ -147,7 +150,8 @@ def plot_admin_priors(eps, sigma, admin_priors, data_dict):
 
 
     # decorate the figure
-    title('Error in Admin LLIN flow')
+    xlabel('Error in Admin LLIN flow')
+    ylabel('Probability Density')
 
     savefig('admin_priors.png')
     savefig('admin_priors.eps')
@@ -278,7 +282,8 @@ def plot_neg_binom_fits():
             width=.5, alpha=.5, color='green')
 
         text(4, 50, '%s, %d\nRMSE=%.2f' %
-             (d['Country'], d['Survey_Year1'], 100*rmse([mu,alpha])) + '%',
+             (d['Country'], d['Survey_Year1'], 100*rmse([mu,alpha])) + '%' +
+             '\nmu=%.1f\nalpha=%.1f' % (mu, alpha),
              fontsize=10, horizontalalignment='right',verticalalignment='top')
 
         print 'errors: ', rmse([mu,alpha]), sqrt(sum(yerr**2))
@@ -494,12 +499,12 @@ def plot_posterior(c_id, c, pop,
     if len(manufacturing_obs) > 0:
         scatter_data(data.llin_manu, c, 'Country', 'Manu_Itns', scale=mean(pop),
                      error_val=1.96 * s_m.stats()['mean'], offset=.5)
-    decorate_figure(ymax=.2)
+    decorate_figure(ymax=.3)
 
     subplot(rows, cols/2, 1*(cols/2)+1)
     title('LLINs in country, not in households (per capita)', fontsize=fontsize)
     plot_fit(W, scale=pop)
-    decorate_figure(ymax=.2)
+    decorate_figure(ymax=.3)
 
     subplot(rows, cols/2, 2*(cols/2)+1)
     title('LLINs distributed (per capita)', fontsize=fontsize)
@@ -515,7 +520,7 @@ def plot_posterior(c_id, c, pop,
                      pi=pi.stats()['mean'],
                      label=label, offset=.5)
     legend(loc='upper left')
-    decorate_figure(ymax=.2)
+    decorate_figure(ymax=.3)
 
     subplot(rows, cols/2, 4*(cols/2)+1)
     title('ITN and LLIN coverage', fontsize=fontsize)
@@ -541,7 +546,7 @@ def plot_posterior(c_id, c, pop,
         d['Year'] = mean_survey_date[0] + mean_survey_date[1]/12.
     scatter_data(data.hh_llin_stock, c, 'Country', 'SvyIndex_LLINstotal', scale=mean(pop),
                  error_key='SvyIndex_st', fmt='bs')
-    decorate_figure(ymax=.2)
+    decorate_figure(ymax=.3)
 
     savefig('bednets_%s_%d_%s.png' % (c, c_id, time.strftime('%Y_%m_%d_%H_%M')))
     
