@@ -2,12 +2,15 @@
 bednet distribution
 """
 
+import settings
+
 from pylab import *
 from pymc import *
 import time
 import copy
 
-import settings
+from data import Data
+data = Data()
 
 def plot_discard_prior(pi, discard_prior):
     """ Generate a plot of the hyper-prior and empirical prior discard
@@ -256,6 +259,7 @@ def plot_neg_binom_fits():
     import scipy.optimize
 
     figure(figsize=(8.5,8.5), dpi=settings.DPI)
+    error_list = []
     
     for ii, d in enumerate(data.llin_num):
         subplot(4, 4, ii+1)
@@ -282,11 +286,11 @@ def plot_neg_binom_fits():
             width=.5, alpha=.5, color='green')
 
         text(4, 50, '%s, %d\nRMSE=%.2f' %
-             (d['Country'], d['Survey_Year1'], 100*rmse([mu,alpha])) + '%' +
-             '\nmu=%.1f\nalpha=%.1f' % (mu, alpha),
+             (d['Country'], d['Survey_Year1'], 100*rmse([mu,alpha])) + '%',
              fontsize=10, horizontalalignment='right',verticalalignment='top')
 
         print 'errors: ', rmse([mu,alpha]), sqrt(sum(yerr**2))
+        error_list.append(rmse([mu,alpha]))
 
         if ii >= 12:
             xticks(x+.5,[0,1,2,3], fontsize=8)
@@ -303,6 +307,7 @@ def plot_neg_binom_fits():
         axis([0, 4, .1, 100])
     savefig('neg_binom_fits.png')
     savefig('neg_binom_fits.eps')
+    print mean(error_list)
     
 def plot_posterior(c_id, c, pop,
                    s_m, s_d, e_d, pi, nm, nd, W, H, Hprime, s_r_c, eta, alpha, s_rb,
@@ -550,3 +555,5 @@ def plot_posterior(c_id, c, pop,
 
     savefig('bednets_%s_%d_%s.png' % (c, c_id, time.strftime('%Y_%m_%d_%H_%M')))
     
+if __name__ == '__main__':
+    plot_neg_binom_fits()

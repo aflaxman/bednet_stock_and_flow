@@ -63,20 +63,17 @@ def main(country_id, itn_composition_std):
     s_rb = Lognormal('recall bias factor', log(.05), .5**-2, value=.05)
     vars += [s_rb]
 
-    #mu_N = where(arange(year_start, year_end) <= 2003, .0001, .001) * pop
-    mu_N = .0001 * pop
+    mu_N = .001 * pop
     std_N = where(arange(year_start, year_end) <= 2003, .2, 2.)
 
-    # TODO: test chain that changes diff(log_delta) instead of log_delta, might mix more rapidly
     log_delta = Normal('log(llins distributed)', mu=log(mu_N), tau=std_N**-2, value=log(mu_N))
     delta = Lambda('llins distributed', lambda x=log_delta: exp(x))
 
     log_mu = Normal('log(llins shipped)', mu=log(mu_N), tau=std_N**-2, value=log(mu_N))
     mu = Lambda('llins shipped', lambda x=log_mu: exp(x))
 
-    mu_Omega = .0001 * pop
     log_Omega = Normal('log(non-llin household net stock)',
-                        mu=log(mu_Omega), tau=2.**-2, value=log(mu_Omega))
+                        mu=log(mu_N), tau=2.**-2, value=log(mu_N))
     Omega = Lambda('non-llin household net stock', lambda x=log_Omega: exp(x))
 
     vars += [log_delta, delta, log_mu, mu, log_Omega, Omega]
@@ -151,18 +148,24 @@ def main(country_id, itn_composition_std):
     proven_capacity_std = .5
     @potential
     def proven_capacity(delta=delta, Omega=Omega, tau=proven_capacity_std**-2):
-        total_dist = delta + Omega
+        total_dist = delta[:-1] + .5*(Omega[1:] + Omega[:-1])
         max_log_d = log(maximum(1.,[max(total_dist[:(i+1)]) for i in range(len(total_dist))]))
         amt_below_cap = minimum(log(maximum(total_dist,1.)) - max_log_d, 0.)
         return normal_like(amt_below_cap, 0., tau)
 
-    itn_composition_std = 1.
+    itn_composition_std = .5
     @potential
     def itn_composition(llin=Theta, non_llin=Omega, tau=itn_composition_std**-2):
         frac_llin = llin / (llin + non_llin)
         return normal_like(frac_llin[[0,1,2,6,7,8,9,10,11]],
                            [0., 0., 0., 1., 1., 1., 1., 1., 1.], tau)
     vars += [proven_capacity, itn_composition]
+
+    smooth_std = .5
+    @potential
+    def smooth_coverage(itn_coverage=itn_coverage, tau=smooth_std**-2):
+        return normal_like(diff(log(itn_coverage)), 0., tau)
+    vars += [smooth_coverage]
 
 
        #####################
@@ -296,7 +299,7 @@ def main(country_id, itn_composition_std):
                 return normal_like(value, coverage_i, 1. / std_err**2)
         else: # data is imputed from under 5 usage, so estimate standard error
             d['coverage'] = 1. - float(d['Per_0LLINs'])
-            N = d['Total_HH'] or 1000
+            N = d['Sample_Size'] or 1000
             d['sampling_error'] = d['coverage']*(1-d['coverage'])/sqrt(N)
             d['coverage_se'] = d['sampling_error']*gamma.value
 
@@ -339,13 +342,10 @@ def main(country_id, itn_composition_std):
                 return normal_like(value, coverage_i, 1. / std_err**2)
 
         else: # data from survey report, must calculate standard error
-            try:
-                mean_survey_date = time.strptime(d['Mean_SvyDate'], '%d-%b-%y')
-                d['Year'] = mean_survey_date[0] + mean_survey_date[1]/12.
-            except ValueError:
-                d['Year'] = d['Survey_Year1'] + .5
+            mean_survey_date = time.strptime(d['Mean_SvyDate'], '%d-%b-%y')
+            d['Year'] = mean_survey_date[0] + mean_survey_date[1]/12.
 
-            N = d['Total_HH'] or 1000
+            N = d['Sample_Size'] or 1000
             d['sampling_error'] = d['coverage']*(1-d['coverage'])/sqrt(N)
             d['coverage_se'] = d['sampling_error']*gamma.value
 
@@ -412,13 +412,13 @@ def main(country_id, itn_composition_std):
 
         # step method for llin distribution related stochs
         #mc.use_step_method(AdaptiveMetropolis, [log_delta, s_rb])
-        mc.use_step_method(NoStepper, s_rb)
+        #mc.use_step_method(NoStepper, s_rb)
         #mc.use_step_method(Metropolis, log_delta)
 
         # step method for stock and coverage related stochs
         #mc.use_step_method(Metropolis, log_Omega)
         mc.use_step_method(NoStepper, eta)
-        mc.use_step_method(NoStepper, alpha)
+        #mc.use_step_method(NoStepper, alpha)
 
         try:
             if settings.TESTING:
