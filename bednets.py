@@ -404,10 +404,11 @@ def main(country_id, itn_composition_std):
             print '%s: %s' % (str(stoch), str(stoch.value))
 
     if settings.METHOD == 'MCMC':
-        mc = MCMC(vars, verbose=1)
+        mc = MCMC(vars, verbose=1, db='pickle', dbname='bednet_model_%s_%d_%s.pickle' % (c, country_id, time.strftime('%Y_%m_%d_%H_%M')))
         # step method for manufacturing related stochs
         #mc.use_step_method(Metropolis, log_mu)
-        mc.use_step_method(NoStepper, s_m)
+        #mc.use_step_method(NoStepper, s_m)
+        mc.use_step_method(Metropolis, s_m, proposal_sd=.001)
         #mc.use_step_method(AdaptiveMetropolis, [log_mu, s_m])
 
         # step method for llin distribution related stochs
@@ -417,7 +418,9 @@ def main(country_id, itn_composition_std):
 
         # step method for stock and coverage related stochs
         #mc.use_step_method(Metropolis, log_Omega)
-        mc.use_step_method(NoStepper, eta)
+        #mc.use_step_method(NoStepper, eta)
+        mc.use_step_method(Metropolis, eta, proposal_sd=.001)
+        #mc.use_step_method(Metropolis, eta, proposal_distribution='Prior')
         #mc.use_step_method(NoStepper, alpha)
 
         try:
@@ -432,6 +435,7 @@ def main(country_id, itn_composition_std):
             mc.sample(iter*thin+burn, burn, thin)
         except KeyError:
             pass
+        mc.db.commit()
 
     elif settings.METHOD == 'NormApprox':
         na = NormApprox(vars)
