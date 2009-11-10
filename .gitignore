@@ -5,3 +5,4 @@
 *.json
 *.eps
 *.pickle
+local_settings.py
