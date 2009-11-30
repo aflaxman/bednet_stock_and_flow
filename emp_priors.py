@@ -8,6 +8,7 @@ from pymc import *
 
 import simplejson as json
 import os
+import time
 
 from data import Data
 data = Data()
@@ -54,11 +55,12 @@ def llin_discard_rate(recompute=False):
         vars += [retention_obs]
 
     # find model with MCMC
-    mc = MCMC(vars, verbose=1)
+    mc = MCMC(vars, verbose=1, db='pickle', dbname='discard_prior_%s.pickle' % time.strftime('%Y_%m_%d_%H_%M'))
     iter = 10000
     thin = 20
     burn = 20000
     mc.sample(iter*thin+burn, burn, thin)
+    mc.db.commit()
 
     # save fit values for empirical prior
     x = pi.stats()['mean']
@@ -71,7 +73,7 @@ def llin_discard_rate(recompute=False):
 
     graphics.plot_discard_prior(pi, emp_prior_dict)
     
-    return pi, sigma, emp_prior_dict
+    return emp_prior_dict
 
 
 def admin_err_and_bias(recompute=False):
@@ -136,12 +138,12 @@ def admin_err_and_bias(recompute=False):
         vars.append(obs)
 
     # sample from empirical prior distribution via MCMC
-    mc = MCMC(vars, verbose=1)
+    mc = MCMC(vars, verbose=1, db='pickle', dbname='admin_err_prior_%s.pickle' % time.strftime('%Y_%m_%d_%H_%M'))
     iter = 10000
     thin = 20
     burn = 20000
-
     mc.sample(iter*thin+burn, burn, thin)
+    mc.db.commit()
 
     # output information on empirical prior distribution
     emp_prior_dict = dict(
@@ -157,7 +159,7 @@ def admin_err_and_bias(recompute=False):
 
     graphics.plot_admin_priors(eps, sigma, emp_prior_dict, data_dict)
 
-    return eps, sigma, emp_prior_dict, data_dict
+    return emp_prior_dict
 
 
 def neg_binom(recompute=False):
@@ -225,12 +227,12 @@ def neg_binom(recompute=False):
         vars += [stock, obs]
 
     # sample from empirical prior distribution via MCMC
-    mc = MCMC(vars, verbose=1)
+    mc = MCMC(vars, verbose=1, db='pickle', dbname='neg_binom_prior_%s.pickle' % time.strftime('%Y_%m_%d_%H_%M'))
     iter = 1000
     thin = 20
     burn = 2000
-
     mc.sample(iter*thin+burn, burn, thin)
+    mc.db.commit()
 
 
     # output information on empirical prior distribution
@@ -249,7 +251,7 @@ def neg_binom(recompute=False):
 
     graphics.plot_neg_binom_priors(e, a, emp_prior_dict, data_dict)
 
-    return e, a, emp_prior_dict, data_dict
+    return emp_prior_dict
 
 
 def survey_design(recompute=False):
@@ -275,6 +277,96 @@ def survey_design(recompute=False):
     graphics.plot_survey_design_prior(emp_prior_dict, obs)
 
     return emp_prior_dict
+
+
+
+def u5_use(recompute=False):
+    """ Return the empirical priors for predicting use from coverage,
+    calculating them if necessary.
+
+    Parameters
+    ----------
+    recompute : bool, optional
+      pass recompute=True to force recomputation of empirical priors,
+      even if json file exists
+
+    Results
+    -------
+    returns a dict suitable for using to instantiate effect coefficients
+    """
+    # load and return, if applicable
+    fname = 'u5_use_prior.json'
+    if fname in os.listdir(settings.PATH) and not recompute:
+        f = open(settings.PATH + fname)
+        return json.load(f)
+
+    # setup hyper-prior stochs
+    mu_beta_own = Normal('coverage coefficient mean', 0., 1.)
+    tau_beta_own = InverseGamma('coverage coefficient precision', 10., 10.)
+
+    beta_u5 = Normal('u5 pop frac effect', 0., 1.)
+    beta_rain = Normal('rain effect', 0., 1.)
+
+    sigma = InverseGamma('std err of unexplained variation', 10., 10.)
+        
+    # setup country-level random effects
+    beta_own = {}
+    for c in set([d['country'] for d in data.u5_use]):
+        beta_own[c] = Normal('%s coverage coefficient' % c, mu_beta_own, tau_beta_own)
+
+    vars = [mu_beta_own, tau_beta_own, beta_u5, beta_rain, beta_own, sigma]
+
+    ### setup data likelihood stochs
+    for d in data.u5_use:
+        @observed
+        @stochastic
+        def obs(value=d['logit_u5itn_use'], own=d['logititn_cc'],
+                u5_frac=d['logitu5totalpop_ratio'], rain=d['rainy_season'],
+                beta_own_c=beta_own[d['country']], beta_u5=beta_u5, beta_rain=beta_rain,
+                sigma=sigma):
+            return normal_like(value, beta_own_c * own + beta_u5 * u5_frac + beta_rain * rain,
+                               sigma**-2)
+        vars.append(obs)
+
+    # sample from empirical prior distribution via MCMC
+    mc = MCMC(vars, verbose=1, db='pickle', dbname='u5_use_prior_%s.pickle' % time.strftime('%Y_%m_%d_%H_%M'))
+    iter = 10000
+    thin = 20
+    burn = 20000
+    mc.sample(iter*thin+burn, burn, thin)
+    mc.db.commit()
+
+    # output information on empirical prior distribution
+    def normal_approx_dict(stoch):
+        return dict(mu=stoch.stats()['mean'],
+                    std=stoch.stats()['standard deviation'],
+                    tau=stoch.stats()['standard deviation']**-2)
+
+    emp_prior_dict = dict(
+        sigma=normal_approx_dict(sigma),
+        mu_beta_own=dict(mu=mu_beta_own.stats()['mean'],
+                         std=mu_beta_own.stats()['standard deviation'],
+                         tau=mu_beta_own.stats()['standard deviation']**-2),
+        tau_beta_own=dict(mu=tau_beta_own.stats()['mean'],
+                          std=tau_beta_own.stats()['standard deviation'],
+                          tau=tau_beta_own.stats()['standard deviation']**-2),
+        beta_u5=dict(mu=beta_u5.stats()['mean'],
+                         std=beta_u5.stats()['standard deviation'],
+                         tau=beta_u5.stats()['standard deviation']**-2),
+        beta_rain=normal_approx_dict(beta_rain))
+        
+
+    emp_prior_dict['beta_own'] = {}
+    for c in beta_own:
+        emp_prior_dict['beta_own'][c] = normal_approx_dict(beta_own[c])
+
+    f = open(settings.PATH + fname, 'w')
+    json.dump(emp_prior_dict, f)
+
+    #graphics.plot_admin_priors(eps, sigma, emp_prior_dict, data_dict)
+
+    return emp_prior_dict
+
     
 if __name__ == '__main__':
     import optparse
@@ -286,6 +378,7 @@ if __name__ == '__main__':
     if len(args) != 0:
         parser.error('incorrect number of arguments')
 
+    u5_use(recompute=True)
     llin_discard_rate(recompute=True)
     admin_err_and_bias(recompute=True)
     neg_binom(recompute=True)

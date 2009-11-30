@@ -8,6 +8,50 @@ from numpy import zeros, mean
 
 import settings
 
+class Data:
+    def __init__(self):
+        ### load all data from csv files
+        self.retention = load_csv('reten.csv')
+        self.design = load_csv('design.csv')
+
+        self.llin_manu = load_csv('manuitns.csv')
+        self.admin_llin = load_csv('adminllins_itns.csv')
+
+        self.hh_llin_stock = load_csv('stock_llins.csv')
+        self.hh_llin_flow = load_csv('flow_llins.csv')
+
+        self.u5_use = load_csv('u5use.csv')
+        self.u5_cov = load_csv('u5cov.csv')
+
+        # add mean survey date to hh_llin data
+        for d in self.hh_llin_stock + self.hh_llin_flow:
+            mean_survey_date = time.strptime(d['Mean_SvyDate'], '%d-%b-%y')
+            d['mean_survey_date'] = mean_survey_date[0] + mean_survey_date[1]/12.
+
+        self.llin_coverage = load_csv('llincc.csv')
+        self.itn_coverage = load_csv('itncc.csv')
+        self.holdout_itn_coverage = []
+
+        self.llin_num = load_csv('numllins.csv')
+
+        self.population = load_csv('pop.csv')
+
+        self.countries = set([d['Country'] for d in self.population])
+
+    def population_for(self, c, year_start, year_end):
+        pop_vec = zeros(year_end - year_start)
+        for d in self.population:
+            if d['Country'] == c:
+                pop_vec[int(d['Year']) - year_start] = d['Pop']*1000
+
+        # since we might be predicting into the future, fill in population with last existing value
+        for ii in range(1, year_end-year_start):
+            if pop_vec[ii] == 0.:
+                pop_vec[ii] = pop_vec[ii-1]
+
+        return pop_vec
+
+
 def load_csv(fname):
     """ Quick function to load each row of a csv file as a dict
     Parameters
@@ -39,43 +83,3 @@ def load_csv(fname):
                 pass
 
     return data
-
-class Data:
-    def __init__(self):
-        ### load all data from csv files
-        self.retention = load_csv('reten.csv')
-        self.design = load_csv('design.csv')
-
-        self.llin_manu = load_csv('manuitns.csv')
-        self.admin_llin = load_csv('adminllins_itns.csv')
-
-        self.hh_llin_stock = load_csv('stock_llins.csv')
-        self.hh_llin_flow = load_csv('flow_llins.csv')
-
-        # add mean survey date to hh_llin data
-        for d in self.hh_llin_stock + self.hh_llin_flow:
-            mean_survey_date = time.strptime(d['Mean_SvyDate'], '%d-%b-%y')
-            d['mean_survey_date'] = mean_survey_date[0] + mean_survey_date[1]/12.
-
-        self.llin_coverage = load_csv('llincc.csv')
-        self.itn_coverage = load_csv('itncc.csv')
-        self.holdout_itn_coverage = []
-
-        self.llin_num = load_csv('numllins.csv')
-
-        self.population = load_csv('pop.csv')
-
-        self.countries = set([d['Country'] for d in self.population])
-
-    def population_for(self, c, year_start, year_end):
-        pop_vec = zeros(year_end - year_start)
-        for d in self.population:
-            if d['Country'] == c:
-                pop_vec[int(d['Year']) - year_start] = d['Pop']*1000
-
-        # since we might be predicting into the future, fill in population with last existing value
-        for ii in range(1, year_end-year_start):
-            if pop_vec[ii] == 0.:
-                pop_vec[ii] = pop_vec[ii-1]
-
-        return pop_vec
