@@ -381,7 +381,7 @@ def main(country_id, itn_composition_std):
     beta_u5 = Normal('u5_pop_frac_effect', prior['beta_u5']['mu'], prior['beta_u5']['tau'])
     beta_rain = Normal('rain_effect', prior['beta_rain']['mu'], prior['beta_rain']['tau'])
 
-    tau_error = Uniform('precision_of_unexplained_error', 0, 100, value=prior['tau_error']['mu'])
+    tau_error = Normal('precision_of_unexplained_error', prior['tau_error']['mu'], prior['tau_error']['tau'])
 
     if prior['beta_own'].has_key(c):
         beta_own = Normal('coverage_coefficient', prior['beta_own'][c]['mu'], prior['beta_own'][c]['tau'])
@@ -540,7 +540,7 @@ def main(country_id, itn_composition_std):
     graphics.plot_posterior(country_id, c, pop,
                             s_m, s_d, e_d, pi, mu, delta, Psi, Theta, Omega, gamma, eta, alpha, s_rb,
                             manufacturing_obs, admin_distribution_obs, household_distribution_obs,
-                            itn_coverage, llin_coverage, itns_owned, data)
+                            itn_coverage, llin_coverage, itns_owned, data, u5_itn_use_coverage)
 
 if __name__ == '__main__':
     usage = 'usage: %prog [options] country_id'
