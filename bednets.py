@@ -26,6 +26,7 @@ def main(country_id, itn_composition_std):
 
     # get population data for this country, to calculate LLINs per capita
     pop = data.population_for(c, year_start, year_end)
+    u5_pop_frac = data.u5_pop_frac_for(c, year_start, year_end)
 
     ### setup the model variables
     vars = []
@@ -57,7 +58,7 @@ def main(country_id, itn_composition_std):
     vars += [gamma]
 
     # Fully Bayesian priors
-    s_m = Lognormal('error in llin ship', log(.05), .5**-2, value=.05)
+    s_m = Lognormal('error_in_llin_ship', log(.05), .5**-2, value=.05)
     vars += [s_m]
 
     s_rb = Lognormal('recall bias factor', log(.05), .5**-2, value=.05)
@@ -372,6 +373,49 @@ def main(country_id, itn_composition_std):
     vars += [coverage_obs]
 
 
+    ### u5 itn use
+    # Empirical Bayesian priors
+    prior = emp_priors.u5_use()
+
+    beta_intercept = Normal('beta_intercept', prior['beta_intercept']['mu'], prior['beta_intercept']['tau'])
+    beta_u5 = Normal('u5_pop_frac_effect', prior['beta_u5']['mu'], prior['beta_u5']['tau'])
+    beta_rain = Normal('rain_effect', prior['beta_rain']['mu'], prior['beta_rain']['tau'])
+
+    tau_error = Uniform('precision_of_unexplained_error', 0, 100, value=prior['tau_error']['mu'])
+
+    if prior['beta_own'].has_key(c):
+        beta_own = Normal('coverage_coefficient', prior['beta_own'][c]['mu'], prior['beta_own'][c]['tau'])
+    else:
+        combined_tau = 1. / (1. / prior['mu_beta_own']['tau'] + 1. / prior['tau_beta_own']['mu'])
+        beta_own = Normal('coverage_coefficient', prior['mu_beta_own']['mu'], combined_tau)
+
+    vars += [beta_intercept, beta_u5, beta_rain, beta_own, tau_error]
+
+    @deterministic(name='u5_itn_use_coverage')
+    def u5_itn_use_coverage(b0=beta_intercept, b1=beta_own, b2=beta_u5, b3=beta_rain, u5_pop_frac=u5_pop_frac,
+                            own=itn_coverage):
+        return invlogit(b0 + b1*logit(own) + b2*logit(u5_pop_frac) + b3*1.)
+
+    vars += [u5_itn_use_coverage]
+
+    ### setup data likelihood stochs
+    use_obs = []
+    for d in data.u5_use:
+        if d['country'] != c:
+            continue
+
+        @observed
+        @stochastic
+        def obs(value=d['logit_u5itn_use'], own=itn_coverage, year=d['survey_year1'],
+                logit_u5_pop_frac=d['logitu5totalpop_ratio'], rain=d['rainy_season'],
+                b0=beta_intercept,
+                b1=beta_own, b2=beta_u5, b3=beta_rain,
+                tau=tau_error):
+            return normal_like(value, b0 + b1*logit(own[year-year_start]) + b2*logit_u5_pop_frac + b3*rain, tau)
+        
+        use_obs.append(obs)
+
+    vars += [use_obs]
 
        #################
       ### fit the model
@@ -448,15 +492,18 @@ def main(country_id, itn_composition_std):
         assert 0, 'Unknown estimation method'
 
     # save results in output file
-    col_headings = ['Country', 'Year', 'Population',
-                    'LLINs Shipped (Thousands)', 'LLINs Shipped Lower CI', 'LLINs Shipped Upper CI',
-                    'LLINs Distributed (Thousands)', 'LLINs Distributed Lower CI', 'LLINs Distributed Upper CI',
-                    'LLINs Not Owned Warehouse (Thousands)', 'LLINs Not Owned Lower CI', 'LLINs Not Owned Upper CI',
-                    'LLINs Owned (Thousands)', 'LLINs Owned Lower CI', 'LLINs Owned Upper CI',
-                    'non-LLIN ITNs Owned (Thousands)', 'non-LLIN ITNs Owned Lower CI', 'non-LLIN ITNs Owned Upper CI',
-                    'ITNs Owned (Thousands)', 'ITNs Owned Lower CI', 'ITNs Owned Upper CI',
-                    'LLIN Coverage (Percent)', 'LLIN Coverage Lower CI', 'LLIN Coverage Upper CI',
-                    'ITN Coverage (Percent)', 'ITN Coverage Lower CI', 'ITN Coverage Upper CI']
+    col_headings = [
+        'Country', 'Year', 'Population',
+        'LLINs Shipped (Thousands)', 'LLINs Shipped Lower CI', 'LLINs Shipped Upper CI',
+        'LLINs Distributed (Thousands)', 'LLINs Distributed Lower CI', 'LLINs Distributed Upper CI',
+        'LLINs Not Owned Warehouse (Thousands)', 'LLINs Not Owned Lower CI', 'LLINs Not Owned Upper CI',
+        'LLINs Owned (Thousands)', 'LLINs Owned Lower CI', 'LLINs Owned Upper CI',
+        'non-LLIN ITNs Owned (Thousands)', 'non-LLIN ITNs Owned Lower CI', 'non-LLIN ITNs Owned Upper CI',
+        'ITNs Owned (Thousands)', 'ITNs Owned Lower CI', 'ITNs Owned Upper CI',
+        'LLIN Coverage (Percent)', 'LLIN Coverage Lower CI', 'LLIN Coverage Upper CI',
+        'ITN Coverage (Percent)', 'ITN Coverage Lower CI', 'ITN Coverage Upper CI',
+        'ITN Under-5 Use (Percent)', 'ITN Under-5 Use Lower CI', 'ITN Under-5 Use Upper CI',
+        ]
 
     try:  # sleep for a random time interval to avoid collisions when writing results
         print 'sleeping...'
@@ -485,19 +532,8 @@ def main(country_id, itn_composition_std):
         val += [itns_owned.stats()['mean'][t]/1000] + list(itns_owned.stats()['95% HPD interval'][t]/1000)
         val += [100*llin_coverage.stats()['mean'][t]] + list(100*llin_coverage.stats()['95% HPD interval'][t])
         val += [100*itn_coverage.stats()['mean'][t]] + list(100*itn_coverage.stats()['95% HPD interval'][t])
+        val += [100*u5_itn_use_coverage.stats()['mean'][t]] + list(100*u5_itn_use_coverage.stats()['95% HPD interval'][t])
         f.write(','.join(['%.2f']*(len(col_headings)-3)) % tuple(val))
-        f.write('\n')
-    f.close()
-
-    f = open('traces/itn_coverage_%s_%d_%s.csv' % (c, country_id, time.strftime('%Y_%m_%d_%H_%M')), 'w')
-    for row in itn_coverage.trace():
-        f.write(','.join(['%.4f' % cell for cell in row]))
-        f.write('\n')
-    f.close()
-
-    f = open('traces/itn_stock_%s_%d_%s.csv' % (c, country_id, time.strftime('%Y_%m_%d_%H_%M')), 'w')
-    for row in itns_owned.trace():
-        f.write(','.join(['%.4f' % cell for cell in row]))
         f.write('\n')
     f.close()
     

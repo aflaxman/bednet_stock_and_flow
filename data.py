@@ -51,6 +51,19 @@ class Data:
 
         return pop_vec
 
+    def u5_pop_frac_for(self, c, year_start, year_end):
+        frac_vec = zeros(year_end - year_start)
+        for d in self.u5_cov:
+            if d['country'] == c:
+                frac_vec[int(d['year']) - year_start] = d['u5totalpop_ratio']
+
+        # since we might be predicting into the future, fill in population with last existing value
+        for ii in range(1, year_end-year_start):
+            if frac_vec[ii] == 0.:
+                frac_vec[ii] = frac_vec[ii-1]
+
+        return frac_vec
+
 
 def load_csv(fname):
     """ Quick function to load each row of a csv file as a dict

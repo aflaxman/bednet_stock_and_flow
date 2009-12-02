@@ -301,31 +301,34 @@ def u5_use(recompute=False):
         return json.load(f)
 
     # setup hyper-prior stochs
-    mu_beta_own = Normal('coverage coefficient mean', 0., 1.)
-    tau_beta_own = InverseGamma('coverage coefficient precision', 10., 10.)
+    mu_beta_own = Normal('coverage coefficient mean', 0., 10.)
+    sigma_beta_own = Uniform('coverage coefficient std error', 0., 100.)
+    tau_beta_own = Lambda('coverage coefficient precision', lambda x=sigma_beta_own: x**-2)
 
-    beta_u5 = Normal('u5 pop frac effect', 0., 1.)
-    beta_rain = Normal('rain effect', 0., 1.)
+    beta_intercept = Normal('intercept', 0., 10.)
+    beta_u5 = Normal('u5 pop frac effect', 0., 10.)
+    beta_rain = Normal('rain effect', 0., 10.)
 
-    sigma = InverseGamma('std err of unexplained variation', 10., 10.)
-        
+    sigma_error = Uniform('std err of unexplained variation', 0., 100.)
+    tau_error = Lambda('precision of unexplained error', lambda x=sigma_error: x**-2)
+    
     # setup country-level random effects
     beta_own = {}
     for c in set([d['country'] for d in data.u5_use]):
         beta_own[c] = Normal('%s coverage coefficient' % c, mu_beta_own, tau_beta_own)
 
-    vars = [mu_beta_own, tau_beta_own, beta_u5, beta_rain, beta_own, sigma]
+    vars = [mu_beta_own, sigma_beta_own, tau_beta_own, beta_intercept, beta_u5, beta_rain, beta_own, sigma_error, tau_error]
 
     ### setup data likelihood stochs
     for d in data.u5_use:
         @observed
         @stochastic
         def obs(value=d['logit_u5itn_use'], own=d['logititn_cc'],
-                u5_frac=d['logitu5totalpop_ratio'], rain=d['rainy_season'],
+                u5_frac=d['logitu5totalpop_ratio'], rain=d['rainy_season'], beta_intercept=beta_intercept,
                 beta_own_c=beta_own[d['country']], beta_u5=beta_u5, beta_rain=beta_rain,
-                sigma=sigma):
-            return normal_like(value, beta_own_c * own + beta_u5 * u5_frac + beta_rain * rain,
-                               sigma**-2)
+                tau=tau_error):
+            return normal_like(value, beta_intercept + beta_own_c * own + beta_u5 * u5_frac + beta_rain * rain, tau)
+        
         vars.append(obs)
 
     # sample from empirical prior distribution via MCMC
@@ -343,7 +346,8 @@ def u5_use(recompute=False):
                     tau=stoch.stats()['standard deviation']**-2)
 
     emp_prior_dict = dict(
-        sigma=normal_approx_dict(sigma),
+        beta_intercept=normal_approx_dict(beta_intercept),
+        tau_error=normal_approx_dict(tau_error),
         mu_beta_own=dict(mu=mu_beta_own.stats()['mean'],
                          std=mu_beta_own.stats()['standard deviation'],
                          tau=mu_beta_own.stats()['standard deviation']**-2),
