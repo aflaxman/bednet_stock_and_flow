@@ -104,15 +104,9 @@ def main(country_id, itn_composition_std):
         Theta3[1:] = Theta2[:-1] * (1  - pi)
         return Theta3
 
-    @deterministic(name='4-year-old household llin stock')
-    def Theta4(Theta3=Theta3, pi=pi):
-        Theta4 = zeros(year_end-year_start)
-        Theta4[1:] = Theta3[:-1] * (1 - pi)
-        return Theta4
-
     @deterministic(name='household llin stock')
-    def Theta(Theta1=Theta1, Theta2=Theta2, Theta3=Theta3, Theta4=Theta4):
-        return Theta1 + Theta2 + Theta3 + Theta4
+    def Theta(Theta1=Theta1, Theta2=Theta2, Theta3=Theta3):
+        return Theta1 + Theta2 + Theta3
 
     @deterministic(name='household itn stock')
     def itns_owned(Theta=Theta, Omega=Omega):
@@ -128,7 +122,7 @@ def main(country_id, itn_composition_std):
                      eta=eta, alpha=alpha):
         return 1. - (alpha / (eta*(llin + non_llin)/pop + alpha))**alpha
 
-    vars += [Psi, Theta, Theta1, Theta2, Theta3, Theta4, itns_owned, llin_coverage, itn_coverage]
+    vars += [Psi, Theta, Theta1, Theta2, Theta3, itns_owned, llin_coverage, itn_coverage]
 
     # set initial conditions on nets manufactured to have no stockouts
     if min(Psi.value) < 0:

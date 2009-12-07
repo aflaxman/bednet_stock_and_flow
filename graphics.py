@@ -531,7 +531,7 @@ def plot_posterior(c_id, c, pop,
     title('ITN and LLIN coverage', fontsize=fontsize)
     plot_fit(itn_coverage, scale=.01)
     plot_fit(llin_coverage, scale=.01, style='alt lines')
-    plot_fit(u5_use, scale=.01, style='alt lines')
+    plot_fit(u5_use, scale=.01)
     if max(itn_coverage.stats()['mean']) > .1:
         hlines([80], 1999, 2009, linestyle='dotted', color='blue', alpha=.5)
 

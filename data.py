@@ -20,19 +20,16 @@ class Data:
         self.hh_llin_stock = load_csv('stock_llins.csv')
         self.hh_llin_flow = load_csv('flow_llins.csv')
 
-        self.u5_use = load_csv('u5use.csv')
-        self.u5_cov = load_csv('u5cov.csv')
-
-        # add mean survey date to hh_llin data
-        for d in self.hh_llin_stock + self.hh_llin_flow:
-            mean_survey_date = time.strptime(d['Mean_SvyDate'], '%d-%b-%y')
-            d['mean_survey_date'] = mean_survey_date[0] + mean_survey_date[1]/12.
-
+        self.u5_use = load_csv('u5itn_use.csv')
         self.llin_coverage = load_csv('llincc.csv')
         self.itn_coverage = load_csv('itncc.csv')
-        self.holdout_itn_coverage = []
-
         self.llin_num = load_csv('numllins.csv')
+
+        # add mean survey date to data
+        for d in self.hh_llin_stock + self.hh_llin_flow + self.u5_use \
+                + self.llin_coverage + self.itn_coverage + self.llin_num:
+            mean_survey_date = time.strptime(d['Mean_SvyDate'], '%d-%b-%y')
+            d['mean_survey_date'] = mean_survey_date[0] + mean_survey_date[1]/12.
 
         self.population = load_csv('pop.csv')
 

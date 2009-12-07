@@ -301,31 +301,40 @@ def u5_use(recompute=False):
         return json.load(f)
 
     # setup hyper-prior stochs
-    mu_beta_own = Normal('coverage coefficient mean', 0., 10.)
-    sigma_beta_own = Uniform('coverage coefficient std error', 0., 100.)
-    tau_beta_own = Lambda('coverage coefficient precision', lambda x=sigma_beta_own: x**-2)
+    mu_beta_own = Uniform('mu_beta_own', -100., 100., value=1.)
+    sigma_beta_own = Uniform('sigma_beta_own', 0., 100., value=1.)
+    tau_beta_own = Lambda('tau_beta_own', lambda x=sigma_beta_own: x**-2)
 
-    beta_intercept = Normal('intercept', 0., 10.)
-    beta_u5 = Normal('u5 pop frac effect', 0., 10.)
-    beta_rain = Normal('rain effect', 0., 10.)
+    beta_intercept = Uniform('beta_intercept', -100., 100., value=0.)
+    beta_u5 = Uniform('beta_u5', -100., 100., value=0.)
+    beta_rain = Uniform('beta_rain', -100., 100., value=.2)
 
-    sigma_error = Uniform('std err of unexplained variation', 0., 100.)
-    tau_error = Lambda('precision of unexplained error', lambda x=sigma_error: x**-2)
+    sigma_error = Uniform('sigma_error', 0., 100., value=1.)
+    tau_error = Lambda('tau_error', lambda x=sigma_error: x**-2)
     
     # setup country-level random effects
     beta_own = {}
-    for c in set([d['country'] for d in data.u5_use]):
-        beta_own[c] = Normal('%s coverage coefficient' % c, mu_beta_own, tau_beta_own)
+    for c in set([d['Country'] for d in data.u5_use]):
+        beta_own[c] = Normal('beta_own_%s'%c, mu_beta_own, tau_beta_own, value=1.)
 
-    vars = [mu_beta_own, sigma_beta_own, tau_beta_own, beta_intercept, beta_u5, beta_rain, beta_own, sigma_error, tau_error]
+    vars = [mu_beta_own, sigma_beta_own, tau_beta_own, beta_own, beta_intercept, beta_u5, beta_rain, sigma_error, tau_error]
 
     ### setup data likelihood stochs
-    for d in data.u5_use:
+    for d_use in data.u5_use:
+        d_own = [d for d in data.itn_coverage if d['Country'] == d_use['Country'] and d['Mean_SvyDate'] == d_use['Mean_SvyDate']]
+        if len(d_own) != 1:
+            continue
+        d_own = d_own[0]
+        
         @observed
         @stochastic
-        def obs(value=d['logit_u5itn_use'], own=d['logititn_cc'],
-                u5_frac=d['logitu5totalpop_ratio'], rain=d['rainy_season'], beta_intercept=beta_intercept,
-                beta_own_c=beta_own[d['country']], beta_u5=beta_u5, beta_rain=beta_rain,
+        def obs(value=logit(d_use['u5itn_use']), own=logit(1 - d_own['Per_0ITNs']),
+                u5_frac=logit(d_use['u5_totpop_ratio']),
+                rain=d_use['rainy_season'],
+                beta_intercept=beta_intercept,
+                beta_own_c=beta_own[d_use['Country']],
+                beta_u5=beta_u5,
+                beta_rain=beta_rain,
                 tau=tau_error):
             return normal_like(value, beta_intercept + beta_own_c * own + beta_u5 * u5_frac + beta_rain * rain, tau)
         
