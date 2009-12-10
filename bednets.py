@@ -26,7 +26,6 @@ def main(country_id, itn_composition_std):
 
     # get population data for this country, to calculate LLINs per capita
     pop = data.population_for(c, year_start, year_end)
-    u5_pop_frac = data.u5_pop_frac_for(c, year_start, year_end)
 
     ### setup the model variables
     vars = []
@@ -259,9 +258,9 @@ def main(country_id, itn_composition_std):
 
         @observed
         @stochastic(name='LLIN_HH_Stock_%s_%s' % (d['Country'], d['Survey_Year2']))
-        def obs(value=d['SvyIndex_LLINstotal'],
+        def obs(value=d['SvyIndex_LLINs'],
                 year=d['Year'],
-                std_err=d['SvyIndex_st'],
+                std_err=d['SvyIndexLLINs_SE'],
                 Theta=Theta):
             year_part = year-floor(year)
             Theta_i = (1-year_part) * Theta[floor(year)-year_start] + year_part * Theta[ceil(year)-year_start]
@@ -371,41 +370,44 @@ def main(country_id, itn_composition_std):
     # Empirical Bayesian priors
     prior = emp_priors.u5_use()
 
-    beta_intercept = Normal('beta_intercept', prior['beta_intercept']['mu'], prior['beta_intercept']['tau'])
-    beta_u5 = Normal('u5_pop_frac_effect', prior['beta_u5']['mu'], prior['beta_u5']['tau'])
-    beta_rain = Normal('rain_effect', prior['beta_rain']['mu'], prior['beta_rain']['tau'])
-
-    tau_error = Normal('precision_of_unexplained_error', prior['tau_error']['mu'], prior['tau_error']['tau'])
+    beta_rain = Normal('beta_rain', prior['beta_rain']['mu'], prior['beta_rain']['tau'])
 
     if prior['beta_own'].has_key(c):
-        beta_own = Normal('coverage_coefficient', prior['beta_own'][c]['mu'], prior['beta_own'][c]['tau'])
+        beta_own = Normal('beta_own', prior['beta_own'][c]['mu'], prior['beta_own'][c]['tau'])
     else:
-        combined_tau = 1. / (1. / prior['mu_beta_own']['tau'] + 1. / prior['tau_beta_own']['mu'])
-        beta_own = Normal('coverage_coefficient', prior['mu_beta_own']['mu'], combined_tau)
+        combined_tau = 1. / (prior['mu_beta_own']['std']**2 + prior['sigma_beta_own']['mu']**2)
+        beta_own = Normal('beta_own', prior['mu_beta_own']['mu'], combined_tau)
 
-    vars += [beta_intercept, beta_u5, beta_rain, beta_own, tau_error]
+    vars += [beta_rain, beta_own]
 
     @deterministic(name='u5_itn_use_coverage')
-    def u5_itn_use_coverage(b0=beta_intercept, b1=beta_own, b2=beta_u5, b3=beta_rain, u5_pop_frac=u5_pop_frac,
+    def u5_itn_use_coverage(beta_own=beta_own, beta_rain=beta_rain,
                             own=itn_coverage):
-        return invlogit(b0 + b1*logit(own) + b2*logit(u5_pop_frac) + b3*1.)
+        return own * beta_own * beta_rain
 
     vars += [u5_itn_use_coverage]
 
     ### setup data likelihood stochs
     use_obs = []
     for d in data.u5_use:
-        if d['country'] != c:
+        if d['Country'] != c:
             continue
 
         @observed
         @stochastic
-        def obs(value=d['logit_u5itn_use'], own=itn_coverage, year=d['survey_year1'],
-                logit_u5_pop_frac=d['logitu5totalpop_ratio'], rain=d['rainy_season'],
-                b0=beta_intercept,
-                b1=beta_own, b2=beta_u5, b3=beta_rain,
-                tau=tau_error):
-            return normal_like(value, b0 + b1*logit(own[year-year_start]) + b2*logit_u5_pop_frac + b3*rain, tau)
+        def obs(value=d['u5itn_use'],
+                own=itn_coverage,
+                year=d['mean_survey_date'],
+                rain=d['rainy_season'],
+                beta_own=beta_own,
+                beta_rain=beta_rain,
+                N=d['Sample_Size'] or 1000):
+            year_part = year-floor(year)
+            own_i = (1-year_part) * own[floor(year)-year_start] + year_part * own[ceil(year)-year_start]
+            p = own_i * beta_own
+            if rain:
+                p *= beta_rain
+            return poisson_like(value*N, p*N)
         
         use_obs.append(obs)
 

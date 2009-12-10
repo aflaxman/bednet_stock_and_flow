@@ -262,7 +262,7 @@ def plot_neg_binom_fits():
     error_list = []
     
     for ii, d in enumerate(data.llin_num):
-        subplot(4, 4, ii+1)
+        subplot(5, 4, ii+1)
 
         # plot data
         x = arange(4)
@@ -539,8 +539,6 @@ def plot_posterior(c_id, c, pop,
                  fmt='bs', scale=.01)
     scatter_data(data.itn_coverage, c, 'Country', 'coverage', 'coverage_se',
                  fmt='r^', scale=.01)
-    scatter_data(data.holdout_itn_coverage, c, 'Country', 'coverage', 'coverage_se',
-                 fmt='c^', scale=.01)
     decorate_figure(ystr='At least one net (%)', ymax=80)
 
     subplot(rows, cols/2, 3*(cols/2)+1)
@@ -550,8 +548,8 @@ def plot_posterior(c_id, c, pop,
     for d in data.hh_llin_stock:
         mean_survey_date = time.strptime(d['Mean_SvyDate'], '%d-%b-%y')
         d['Year'] = mean_survey_date[0] + mean_survey_date[1]/12.
-    scatter_data(data.hh_llin_stock, c, 'Country', 'SvyIndex_LLINstotal', scale=mean(pop),
-                 error_key='SvyIndex_st', fmt='bs')
+    scatter_data(data.hh_llin_stock, c, 'Country', 'SvyIndex_LLINs', scale=mean(pop),
+                 error_key='SvyIndexLLINs_SE', fmt='bs')
     decorate_figure(ymax=.3)
 
     savefig('bednets_%s_%d_%s.png' % (c, c_id, time.strftime('%Y_%m_%d_%H_%M')))

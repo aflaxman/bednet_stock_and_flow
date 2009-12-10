@@ -199,8 +199,8 @@ def neg_binom(recompute=False):
     # store stock data for each country-year
     for d in data.hh_llin_stock:
         key = (d['Country'], d['Survey_Year1'])
-        data_dict[key]['stock'] = d['SvyIndex_LLINstotal'] / data_dict[key]['pop']
-        data_dict[key]['stock_se'] = d['SvyIndex_st'] / data_dict[key]['pop']
+        data_dict[key]['stock'] = d['SvyIndex_LLINs'] / data_dict[key]['pop']
+        data_dict[key]['stock_se'] = d['SvyIndexLLINs_SE'] / data_dict[key]['pop']
 
     # store coverage data for each country-year
     for d in data.llin_coverage:
@@ -301,23 +301,18 @@ def u5_use(recompute=False):
         return json.load(f)
 
     # setup hyper-prior stochs
-    mu_beta_own = Uniform('mu_beta_own', -100., 100., value=1.)
+    mu_beta_own = Uniform('mu_beta_own', 0., 10., value=1.)
     sigma_beta_own = Uniform('sigma_beta_own', 0., 100., value=1.)
     tau_beta_own = Lambda('tau_beta_own', lambda x=sigma_beta_own: x**-2)
 
-    beta_intercept = Uniform('beta_intercept', -100., 100., value=0.)
-    beta_u5 = Uniform('beta_u5', -100., 100., value=0.)
-    beta_rain = Uniform('beta_rain', -100., 100., value=.2)
-
-    sigma_error = Uniform('sigma_error', 0., 100., value=1.)
-    tau_error = Lambda('tau_error', lambda x=sigma_error: x**-2)
+    beta_rain = Uniform('beta_rain', 0., 10., value=1.2)
     
     # setup country-level random effects
     beta_own = {}
     for c in set([d['Country'] for d in data.u5_use]):
         beta_own[c] = Normal('beta_own_%s'%c, mu_beta_own, tau_beta_own, value=1.)
 
-    vars = [mu_beta_own, sigma_beta_own, tau_beta_own, beta_own, beta_intercept, beta_u5, beta_rain, sigma_error, tau_error]
+    vars = [mu_beta_own, sigma_beta_own, tau_beta_own, beta_own, beta_rain]
 
     ### setup data likelihood stochs
     for d_use in data.u5_use:
@@ -328,15 +323,16 @@ def u5_use(recompute=False):
         
         @observed
         @stochastic
-        def obs(value=logit(d_use['u5itn_use']), own=logit(1 - d_own['Per_0ITNs']),
-                u5_frac=logit(d_use['u5_totpop_ratio']),
+        def obs(value=d_use['u5itn_use'],
+                own=1 - d_own['Per_0ITNs'],
                 rain=d_use['rainy_season'],
-                beta_intercept=beta_intercept,
                 beta_own_c=beta_own[d_use['Country']],
-                beta_u5=beta_u5,
                 beta_rain=beta_rain,
-                tau=tau_error):
-            return normal_like(value, beta_intercept + beta_own_c * own + beta_u5 * u5_frac + beta_rain * rain, tau)
+                N=d['Sample_Size'] or 1000):
+            p = own * beta_own_c
+            if rain:
+                p *= beta_rain
+            return poisson_like(value*N, p*N)
         
         vars.append(obs)
 
@@ -355,17 +351,8 @@ def u5_use(recompute=False):
                     tau=stoch.stats()['standard deviation']**-2)
 
     emp_prior_dict = dict(
-        beta_intercept=normal_approx_dict(beta_intercept),
-        tau_error=normal_approx_dict(tau_error),
-        mu_beta_own=dict(mu=mu_beta_own.stats()['mean'],
-                         std=mu_beta_own.stats()['standard deviation'],
-                         tau=mu_beta_own.stats()['standard deviation']**-2),
-        tau_beta_own=dict(mu=tau_beta_own.stats()['mean'],
-                          std=tau_beta_own.stats()['standard deviation'],
-                          tau=tau_beta_own.stats()['standard deviation']**-2),
-        beta_u5=dict(mu=beta_u5.stats()['mean'],
-                         std=beta_u5.stats()['standard deviation'],
-                         tau=beta_u5.stats()['standard deviation']**-2),
+        mu_beta_own=normal_approx_dict(mu_beta_own),
+        sigma_beta_own=normal_approx_dict(sigma_beta_own),
         beta_rain=normal_approx_dict(beta_rain))
         
 
