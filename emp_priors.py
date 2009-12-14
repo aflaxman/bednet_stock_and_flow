@@ -301,16 +301,16 @@ def u5_use(recompute=False):
         return json.load(f)
 
     # setup hyper-prior stochs
-    mu_beta_own = Uniform('mu_beta_own', 0., 10., value=1.)
-    sigma_beta_own = Uniform('sigma_beta_own', 0., 100., value=1.)
+    mu_beta_own = Uniform('mu_beta_own', 0., 10., value=[1., 1.])
+    sigma_beta_own = Uniform('sigma_beta_own', 0., 100., value=[1., 1.])
     tau_beta_own = Lambda('tau_beta_own', lambda x=sigma_beta_own: x**-2)
 
-    beta_rain = Uniform('beta_rain', 0., 10., value=1.2)
+    beta_rain = Uniform('beta_rain', 0., 10., value=[1.2])
     
     # setup country-level random effects
     beta_own = {}
     for c in set([d['Country'] for d in data.u5_use]):
-        beta_own[c] = Normal('beta_own_%s'%c, mu_beta_own, tau_beta_own, value=1.)
+        beta_own[c] = Normal('beta_own_%s'%c, mu_beta_own, tau_beta_own, value=[1.,.1])
 
     vars = [mu_beta_own, sigma_beta_own, tau_beta_own, beta_own, beta_rain]
 
@@ -328,8 +328,9 @@ def u5_use(recompute=False):
                 rain=d_use['rainy_season'],
                 beta_own_c=beta_own[d_use['Country']],
                 beta_rain=beta_rain,
+                year=d['mean_survey_date'],
                 N=d['Sample_Size'] or 1000):
-            p = own * beta_own_c
+            p = own * exp(beta_own_c[0] + beta_own_c[1]*(year-settings.year_start))
             if rain:
                 p *= beta_rain
             return poisson_like(value*N, p*N)
@@ -346,9 +347,9 @@ def u5_use(recompute=False):
 
     # output information on empirical prior distribution
     def normal_approx_dict(stoch):
-        return dict(mu=stoch.stats()['mean'],
-                    std=stoch.stats()['standard deviation'],
-                    tau=stoch.stats()['standard deviation']**-2)
+        return dict(mu=list(stoch.stats()['mean']),
+                    std=list(stoch.stats()['standard deviation']),
+                    tau=list(stoch.stats()['standard deviation']**-2))
 
     emp_prior_dict = dict(
         mu_beta_own=normal_approx_dict(mu_beta_own),

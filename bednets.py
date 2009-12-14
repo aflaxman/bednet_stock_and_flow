@@ -375,15 +375,17 @@ def main(country_id, itn_composition_std):
     if prior['beta_own'].has_key(c):
         beta_own = Normal('beta_own', prior['beta_own'][c]['mu'], prior['beta_own'][c]['tau'])
     else:
-        combined_tau = 1. / (prior['mu_beta_own']['std']**2 + prior['sigma_beta_own']['mu']**2)
+        combined_tau = 1. / (array(prior['mu_beta_own']['std'])**2 + array(prior['sigma_beta_own']['mu'])**2)
         beta_own = Normal('beta_own', prior['mu_beta_own']['mu'], combined_tau)
 
     vars += [beta_rain, beta_own]
 
     @deterministic(name='u5_itn_use_coverage')
     def u5_itn_use_coverage(beta_own=beta_own, beta_rain=beta_rain,
-                            own=itn_coverage):
-        return own * beta_own * beta_rain
+                            own=itn_coverage,
+                            year=d['mean_survey_date']
+                            ):
+        return own * exp(beta_own[0] + beta_own[1]*(year-year_start)) * beta_rain
 
     vars += [u5_itn_use_coverage]
 
@@ -404,7 +406,7 @@ def main(country_id, itn_composition_std):
                 N=d['Sample_Size'] or 1000):
             year_part = year-floor(year)
             own_i = (1-year_part) * own[floor(year)-year_start] + year_part * own[ceil(year)-year_start]
-            p = own_i * beta_own
+            p = own_i * exp(beta_own[0] + beta_own[1]*(year-year_start))
             if rain:
                 p *= beta_rain
             return poisson_like(value*N, p*N)

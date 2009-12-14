@@ -5,7 +5,7 @@ PATH = './'  # use current directory
 CSV_NAME = 'output.csv'
 
 # set TESTING to True to speed up all calculations (and make them much less accurate)
-TESTING = False
+TESTING = True
 
 # Use 3000 samples for final uncertainty estimates;  50 will be enough for refining model/priors
 #NUM_SAMPLES = 50

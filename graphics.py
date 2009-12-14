@@ -527,6 +527,10 @@ def plot_posterior(c_id, c, pop,
     legend(loc='upper left')
     decorate_figure(ymax=.3)
 
+    for d in data.hh_llin_stock + data.u5_use:
+        mean_survey_date = time.strptime(d['Mean_SvyDate'], '%d-%b-%y')
+        d['Year'] = mean_survey_date[0] + mean_survey_date[1]/12.
+
     subplot(rows, cols/2, 4*(cols/2)+1)
     title('ITN and LLIN coverage', fontsize=fontsize)
     plot_fit(itn_coverage, scale=.01)
@@ -539,15 +543,14 @@ def plot_posterior(c_id, c, pop,
                  fmt='bs', scale=.01)
     scatter_data(data.itn_coverage, c, 'Country', 'coverage', 'coverage_se',
                  fmt='r^', scale=.01)
+    scatter_data(data.u5_use, c, 'Country', 'u5itn_use',
+                 fmt='co', scale=.01)
     decorate_figure(ystr='At least one net (%)', ymax=80)
 
     subplot(rows, cols/2, 3*(cols/2)+1)
     title('ITNs and LLINs in households (per capita)', fontsize=fontsize)
     plot_fit(hh_itn, scale=pop)
     plot_fit(H, scale=pop, style='alt lines')
-    for d in data.hh_llin_stock:
-        mean_survey_date = time.strptime(d['Mean_SvyDate'], '%d-%b-%y')
-        d['Year'] = mean_survey_date[0] + mean_survey_date[1]/12.
     scatter_data(data.hh_llin_stock, c, 'Country', 'SvyIndex_LLINs', scale=mean(pop),
                  error_key='SvyIndexLLINs_SE', fmt='bs')
     decorate_figure(ymax=.3)
