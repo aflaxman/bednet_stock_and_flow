@@ -20,13 +20,12 @@ class Data:
         self.hh_llin_stock = load_csv('stock_llins.csv')
         self.hh_llin_flow = load_csv('flow_llins.csv')
 
-        self.u5_use = load_csv('u5itn_use.csv')
         self.llin_coverage = load_csv('llincc.csv')
         self.itn_coverage = load_csv('itncc.csv')
         self.llin_num = load_csv('numllins.csv')
 
         # add mean survey date to data
-        for d in self.hh_llin_stock + self.hh_llin_flow + self.u5_use \
+        for d in self.hh_llin_stock + self.hh_llin_flow \
                 + self.llin_coverage + self.itn_coverage + self.llin_num:
             mean_survey_date = time.strptime(d['Mean_SvyDate'], '%d-%b-%y')
             d['mean_survey_date'] = mean_survey_date[0] + mean_survey_date[1]/12.
@@ -47,19 +46,6 @@ class Data:
                 pop_vec[ii] = pop_vec[ii-1]
 
         return pop_vec
-
-    def u5_pop_frac_for(self, c, year_start, year_end):
-        frac_vec = zeros(year_end - year_start)
-        for d in self.u5_cov:
-            if d['country'] == c:
-                frac_vec[int(d['year']) - year_start] = d['u5totalpop_ratio']
-
-        # since we might be predicting into the future, fill in population with last existing value
-        for ii in range(1, year_end-year_start):
-            if frac_vec[ii] == 0.:
-                frac_vec[ii] = frac_vec[ii-1]
-
-        return frac_vec
 
 
 def load_csv(fname):

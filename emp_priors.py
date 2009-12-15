@@ -279,96 +279,6 @@ def survey_design(recompute=False):
     return emp_prior_dict
 
 
-
-def u5_use(recompute=False):
-    """ Return the empirical priors for predicting use from coverage,
-    calculating them if necessary.
-
-    Parameters
-    ----------
-    recompute : bool, optional
-      pass recompute=True to force recomputation of empirical priors,
-      even if json file exists
-
-    Results
-    -------
-    returns a dict suitable for using to instantiate effect coefficients
-    """
-    # load and return, if applicable
-    fname = 'u5_use_prior.json'
-    if fname in os.listdir(settings.PATH) and not recompute:
-        f = open(settings.PATH + fname)
-        return json.load(f)
-
-    # setup hyper-prior stochs
-    mu_beta_own = Uniform('mu_beta_own', 0., 10., value=[1., 1.])
-    sigma_beta_own = Uniform('sigma_beta_own', 0., 100., value=[1., 1.])
-    tau_beta_own = Lambda('tau_beta_own', lambda x=sigma_beta_own: x**-2)
-
-    beta_rain = Uniform('beta_rain', 0., 10., value=[1.2])
-    
-    # setup country-level random effects
-    beta_own = {}
-    for c in set([d['Country'] for d in data.u5_use]):
-        beta_own[c] = Normal('beta_own_%s'%c, mu_beta_own, tau_beta_own, value=[1.,.1])
-
-    vars = [mu_beta_own, sigma_beta_own, tau_beta_own, beta_own, beta_rain]
-
-    ### setup data likelihood stochs
-    for d_use in data.u5_use:
-        d_own = [d for d in data.itn_coverage if d['Country'] == d_use['Country'] and d['Mean_SvyDate'] == d_use['Mean_SvyDate']]
-        if len(d_own) != 1:
-            continue
-        d_own = d_own[0]
-        
-        @observed
-        @stochastic
-        def obs(value=d_use['u5itn_use'],
-                own=1 - d_own['Per_0ITNs'],
-                rain=d_use['rainy_season'],
-                beta_own_c=beta_own[d_use['Country']],
-                beta_rain=beta_rain,
-                year=d['mean_survey_date'],
-                N=d['Sample_Size'] or 1000):
-            p = own * exp(beta_own_c[0] + beta_own_c[1]*(year-settings.year_start))
-            if rain:
-                p *= beta_rain
-            return poisson_like(value*N, p*N)
-        
-        vars.append(obs)
-
-    # sample from empirical prior distribution via MCMC
-    mc = MCMC(vars, verbose=1, db='pickle', dbname='u5_use_prior_%s.pickle' % time.strftime('%Y_%m_%d_%H_%M'))
-    iter = 10000
-    thin = 20
-    burn = 20000
-    mc.sample(iter*thin+burn, burn, thin)
-    mc.db.commit()
-
-    # output information on empirical prior distribution
-    def normal_approx_dict(stoch):
-        return dict(mu=list(stoch.stats()['mean']),
-                    std=list(stoch.stats()['standard deviation']),
-                    tau=list(stoch.stats()['standard deviation']**-2))
-
-    emp_prior_dict = dict(
-        mu_beta_own=normal_approx_dict(mu_beta_own),
-        sigma_beta_own=normal_approx_dict(sigma_beta_own),
-        beta_rain=normal_approx_dict(beta_rain))
-        
-
-    emp_prior_dict['beta_own'] = {}
-    for c in beta_own:
-        emp_prior_dict['beta_own'][c] = normal_approx_dict(beta_own[c])
-
-    f = open(settings.PATH + fname, 'w')
-    json.dump(emp_prior_dict, f)
-
-    #graphics.plot_admin_priors(eps, sigma, emp_prior_dict, data_dict)
-
-    return emp_prior_dict
-
-    
 if __name__ == '__main__':
     import optparse
     
@@ -379,7 +289,6 @@ if __name__ == '__main__':
     if len(args) != 0:
         parser.error('incorrect number of arguments')
 
-    u5_use(recompute=True)
     llin_discard_rate(recompute=True)
     admin_err_and_bias(recompute=True)
     neg_binom(recompute=True)

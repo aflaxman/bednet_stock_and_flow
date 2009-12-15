@@ -366,55 +366,6 @@ def main(country_id, itn_composition_std):
     vars += [coverage_obs]
 
 
-    ### u5 itn use
-    # Empirical Bayesian priors
-    prior = emp_priors.u5_use()
-
-    beta_rain = Normal('beta_rain', prior['beta_rain']['mu'], prior['beta_rain']['tau'])
-
-    if prior['beta_own'].has_key(c):
-        beta_own = Normal('beta_own', prior['beta_own'][c]['mu'], prior['beta_own'][c]['tau'])
-    else:
-        combined_tau = 1. / (array(prior['mu_beta_own']['std'])**2 + array(prior['sigma_beta_own']['mu'])**2)
-        beta_own = Normal('beta_own', prior['mu_beta_own']['mu'], combined_tau)
-
-    vars += [beta_rain, beta_own]
-
-    @deterministic(name='u5_itn_use_coverage')
-    def u5_itn_use_coverage(beta_own=beta_own, beta_rain=beta_rain,
-                            own=itn_coverage,
-                            year=d['mean_survey_date']
-                            ):
-        return own * exp(beta_own[0] + beta_own[1]*(year-year_start)) * beta_rain
-
-    vars += [u5_itn_use_coverage]
-
-    ### setup data likelihood stochs
-    use_obs = []
-    for d in data.u5_use:
-        if d['Country'] != c:
-            continue
-
-        @observed
-        @stochastic
-        def obs(value=d['u5itn_use'],
-                own=itn_coverage,
-                year=d['mean_survey_date'],
-                rain=d['rainy_season'],
-                beta_own=beta_own,
-                beta_rain=beta_rain,
-                N=d['Sample_Size'] or 1000):
-            year_part = year-floor(year)
-            own_i = (1-year_part) * own[floor(year)-year_start] + year_part * own[ceil(year)-year_start]
-            p = own_i * exp(beta_own[0] + beta_own[1]*(year-year_start))
-            if rain:
-                p *= beta_rain
-            return poisson_like(value*N, p*N)
-        
-        use_obs.append(obs)
-
-    vars += [use_obs]
-
        #################
       ### fit the model
      ###
@@ -447,23 +398,8 @@ def main(country_id, itn_composition_std):
 
     if settings.METHOD == 'MCMC':
         mc = MCMC(vars, verbose=1, db='pickle', dbname='bednet_model_%s_%d_%s.pickle' % (c, country_id, time.strftime('%Y_%m_%d_%H_%M')))
-        # step method for manufacturing related stochs
-        #mc.use_step_method(Metropolis, log_mu)
-        #mc.use_step_method(NoStepper, s_m)
         mc.use_step_method(Metropolis, s_m, proposal_sd=.001)
-        #mc.use_step_method(AdaptiveMetropolis, [log_mu, s_m])
-
-        # step method for llin distribution related stochs
-        #mc.use_step_method(AdaptiveMetropolis, [log_delta, s_rb])
-        #mc.use_step_method(NoStepper, s_rb)
-        #mc.use_step_method(Metropolis, log_delta)
-
-        # step method for stock and coverage related stochs
-        #mc.use_step_method(Metropolis, log_Omega)
-        #mc.use_step_method(NoStepper, eta)
         mc.use_step_method(Metropolis, eta, proposal_sd=.001)
-        #mc.use_step_method(Metropolis, eta, proposal_distribution='Prior')
-        #mc.use_step_method(NoStepper, alpha)
 
         try:
             if settings.TESTING:
@@ -500,7 +436,6 @@ def main(country_id, itn_composition_std):
         'ITNs Owned (Thousands)', 'ITNs Owned Lower CI', 'ITNs Owned Upper CI',
         'LLIN Coverage (Percent)', 'LLIN Coverage Lower CI', 'LLIN Coverage Upper CI',
         'ITN Coverage (Percent)', 'ITN Coverage Lower CI', 'ITN Coverage Upper CI',
-        'ITN Under-5 Use (Percent)', 'ITN Under-5 Use Lower CI', 'ITN Under-5 Use Upper CI',
         ]
 
     try:  # sleep for a random time interval to avoid collisions when writing results
@@ -530,7 +465,6 @@ def main(country_id, itn_composition_std):
         val += [itns_owned.stats()['mean'][t]/1000] + list(itns_owned.stats()['95% HPD interval'][t]/1000)
         val += [100*llin_coverage.stats()['mean'][t]] + list(100*llin_coverage.stats()['95% HPD interval'][t])
         val += [100*itn_coverage.stats()['mean'][t]] + list(100*itn_coverage.stats()['95% HPD interval'][t])
-        val += [100*u5_itn_use_coverage.stats()['mean'][t]] + list(100*u5_itn_use_coverage.stats()['95% HPD interval'][t])
         f.write(','.join(['%.2f']*(len(col_headings)-3)) % tuple(val))
         f.write('\n')
     f.close()
@@ -538,15 +472,12 @@ def main(country_id, itn_composition_std):
     graphics.plot_posterior(country_id, c, pop,
                             s_m, s_d, e_d, pi, mu, delta, Psi, Theta, Omega, gamma, eta, alpha, s_rb,
                             manufacturing_obs, admin_distribution_obs, household_distribution_obs,
-                            itn_coverage, llin_coverage, itns_owned, data, u5_itn_use_coverage)
+                            itn_coverage, llin_coverage, itns_owned, data
+                            )
 
 if __name__ == '__main__':
     usage = 'usage: %prog [options] country_id'
     parser = optparse.OptionParser(usage)
-    parser.add_option('-c', '--composition', dest='itn_composition_std',
-                      help='standard deviation for itn composition prior (default is 0.5)')
-    parser.add_option('-v', '--validate', dest='holdout_frac',
-                      help='fraction of itn data to holdout for cross validation')
     (options, args) = parser.parse_args()
 
     if len(args) != 1:
@@ -556,8 +487,5 @@ if __name__ == '__main__':
             country_id = int(args[0])
         except ValueError:
             parser.error('country_id must be an integer')
-
-        if options.holdout_frac:
-            data.holdout(float(options.holdout_frac))
 
         main(country_id, options.itn_composition_std)

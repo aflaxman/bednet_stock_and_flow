@@ -312,7 +312,7 @@ def plot_neg_binom_fits():
 def plot_posterior(c_id, c, pop,
                    s_m, s_d, e_d, pi, nm, nd, W, H, Hprime, s_r_c, eta, alpha, s_rb,
                    manufacturing_obs, admin_distribution_obs, household_distribution_obs,
-                   itn_coverage, llin_coverage, hh_itn, data, u5_use):
+                   itn_coverage, llin_coverage, hh_itn, data):
     from settings import year_start, year_end
     
     ### setup the canvas for our plots
@@ -527,7 +527,7 @@ def plot_posterior(c_id, c, pop,
     legend(loc='upper left')
     decorate_figure(ymax=.3)
 
-    for d in data.hh_llin_stock + data.u5_use:
+    for d in data.hh_llin_stock:
         mean_survey_date = time.strptime(d['Mean_SvyDate'], '%d-%b-%y')
         d['Year'] = mean_survey_date[0] + mean_survey_date[1]/12.
 
@@ -535,7 +535,6 @@ def plot_posterior(c_id, c, pop,
     title('ITN and LLIN coverage', fontsize=fontsize)
     plot_fit(itn_coverage, scale=.01)
     plot_fit(llin_coverage, scale=.01, style='alt lines')
-    plot_fit(u5_use, scale=.01)
     if max(itn_coverage.stats()['mean']) > .1:
         hlines([80], 1999, 2009, linestyle='dotted', color='blue', alpha=.5)
 
@@ -543,8 +542,6 @@ def plot_posterior(c_id, c, pop,
                  fmt='bs', scale=.01)
     scatter_data(data.itn_coverage, c, 'Country', 'coverage', 'coverage_se',
                  fmt='r^', scale=.01)
-    scatter_data(data.u5_use, c, 'Country', 'u5itn_use',
-                 fmt='co', scale=.01)
     decorate_figure(ystr='At least one net (%)', ymax=80)
 
     subplot(rows, cols/2, 3*(cols/2)+1)
