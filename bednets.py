@@ -18,7 +18,7 @@ data = Data()
 import emp_priors
 import graphics
 
-def main(country_id, itn_composition_std):
+def main(country_id):
     from settings import year_start, year_end
 
     c = sorted(data.countries)[country_id]
@@ -469,6 +469,18 @@ def main(country_id, itn_composition_std):
         f.write('\n')
     f.close()
     
+    f = open(settings.PATH + 'traces/itn_coverage_%s_%d_%s.csv' % (c, country_id, time.strftime('%Y_%m_%d_%H_%M')), 'w')
+    for row in itn_coverage.trace():
+        f.write(','.join(['%.4f' % cell for cell in row]))
+        f.write('\n')
+    f.close()
+    
+    f = open(settings.PATH + 'traces/itn_stock_%s_%d_%s.csv' % (c, country_id, time.strftime('%Y_%m_%d_%H_%M')), 'w')
+    for row in itns_owned.trace():
+        f.write(','.join(['%.4f' % cell for cell in row]))
+        f.write('\n')
+    f.close()
+
     graphics.plot_posterior(country_id, c, pop,
                             s_m, s_d, e_d, pi, mu, delta, Psi, Theta, Omega, gamma, eta, alpha, s_rb,
                             manufacturing_obs, admin_distribution_obs, household_distribution_obs,
@@ -488,4 +500,4 @@ if __name__ == '__main__':
         except ValueError:
             parser.error('country_id must be an integer')
 
-        main(country_id, options.itn_composition_std)
+        main(country_id)
