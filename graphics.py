@@ -262,7 +262,7 @@ def plot_neg_binom_fits():
     error_list = []
     
     for ii, d in enumerate(data.llin_num):
-        subplot(5, 4, ii+1)
+        subplot(5, 5, ii+1)
 
         # plot data
         x = arange(4)

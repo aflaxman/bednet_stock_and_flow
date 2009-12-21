@@ -125,7 +125,7 @@ def main(country_id):
 
     # set initial conditions on nets manufactured to have no stockouts
     if min(Psi.value) < 0:
-        log_mu.value = log(mu.value - 2*min(Psi.value))
+        log_mu.value = log(maximum(1., mu.value - 2*min(Psi.value)))
 
        #####################
       ### additional priors
@@ -177,14 +177,14 @@ def main(country_id):
 
         @observed
         @stochastic(name='manufactured_%s_%s' % (d['Country'], d['Year']))
-        def obs(value=float(d['Manu_Itns']), year=int(d['Year']), mu=mu, s_m=s_m):
+        def obs(value=max(1., float(d['Manu_Itns'])), year=int(d['Year']), mu=mu, s_m=s_m):
             return normal_like(log(value),  log(max(1., mu[year - year_start])), 1. / s_m**2)
         manufacturing_obs.append(obs)
 
         # also take this opportinuty to set better initial values for the MCMC
         cur_val = copy.copy(mu.value)
         cur_val[int(d['Year']) - year_start] = min(d['Manu_Itns'], 10.)
-        log_mu.value = log(cur_val)
+        log_mu.value = log(maximum(1., cur_val))
 
     vars += [manufacturing_obs]
 
