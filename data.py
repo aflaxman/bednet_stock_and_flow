@@ -27,18 +27,18 @@ class Data:
         # add mean survey date to data
         for d in self.hh_llin_stock + self.hh_llin_flow \
                 + self.llin_coverage + self.itn_coverage + self.llin_num:
-            mean_survey_date = time.strptime(d['Mean_SvyDate'], '%d-%b-%y')
+            mean_survey_date = time.strptime(d['mean_svydate'], '%d-%b-%y')
             d['mean_survey_date'] = mean_survey_date[0] + mean_survey_date[1]/12.
 
         self.population = load_csv('pop.csv')
 
-        self.countries = set([d['Country'] for d in self.population])
+        self.countries = set([d['country'] for d in self.population])
 
     def population_for(self, c, year_start, year_end):
         pop_vec = zeros(year_end - year_start)
         for d in self.population:
-            if d['Country'] == c:
-                pop_vec[int(d['Year']) - year_start] = d['Pop']*1000
+            if d['country'] == c:
+                pop_vec[int(d['year']) - year_start] = d['pop']*1000
 
         # since we might be predicting into the future, fill in population with last existing value
         for ii in range(1, year_end-year_start):

@@ -53,7 +53,7 @@ def plot_discard_prior(pi, discard_prior):
     # plot data
     data_vals = []
     for d in data.retention:
-        data_vals.append(1. - d['Retention_Rate'] ** (1 / d['Follow_up_Time']))
+        data_vals.append(1. - d['retention_rate'] ** (1 / d['follow_up_time']))
 
     vlines(data_vals, 0, t+1,
            linewidth=2, alpha=.75, color='black',
@@ -260,14 +260,16 @@ def plot_neg_binom_fits():
 
     figure(figsize=(8.5,8.5), dpi=settings.DPI)
     error_list = []
-    
+
+    cols = 5
+    rows = 5
     for ii, d in enumerate(data.llin_num):
-        subplot(5, 5, ii+1)
+        subplot(cols, rows, ii+1)
 
         # plot data
         x = arange(4)
-        y = array([d['Per_%dLLINs' % i] for i in x])
-        yerr = array([d['LLINs%d_SE' % i] for i in x])
+        y = array([d['per_%dllins' % i] for i in x])
+        yerr = array([d['llins%d_se' % i] for i in x])
         bar(x, y*100, yerr=yerr*100,
             width=.5, alpha=.5, color='blue',
             log=True)
@@ -286,19 +288,19 @@ def plot_neg_binom_fits():
             width=.5, alpha=.5, color='green')
 
         text(4, 50, '%s, %d\nRMSE=%.2f' %
-             (d['Country'], d['Survey_Year1'], 100*rmse([mu,alpha])) + '%',
+             (d['country'], d['survey_year1'], 100*rmse([mu,alpha])) + '%',
              fontsize=10, horizontalalignment='right',verticalalignment='top')
 
         print 'errors: ', rmse([mu,alpha]), sqrt(sum(yerr**2))
         error_list.append(rmse([mu,alpha]))
 
-        if ii >= 12:
+        if ii >= 16:
             xticks(x+.5,[0,1,2,3], fontsize=8)
             xlabel('# of LLINs', fontsize=8)
         else:
             xticks([])
 
-        if ii % 4 == 0:
+        if ii % cols == 0:
             yticks([.1, 1, 10, 100], [.1, 1, 10, '100%'], fontsize=8)
             ylabel('% of Households', fontsize=8)
         else:
@@ -372,7 +374,7 @@ def plot_posterior(c_id, c, pop,
 
         elif error_val:
             error_val = 1.96 * error_val * data_val
-        x = array([float(d['Year']) for d in data_list if d[country_key] == c])
+        x = array([float(d['year']) for d in data_list if d[country_key] == c])
         errorbar(x + offset,
                  data_val/scale,
                  error_val/scale, fmt=fmt, alpha=.75, label=label,
@@ -502,7 +504,7 @@ def plot_posterior(c_id, c, pop,
     title('LLINs shipped (per capita)', fontsize=fontsize)
     plot_fit(nm, scale=pop, style='steps')
     if len(manufacturing_obs) > 0:
-        scatter_data(data.llin_manu, c, 'Country', 'Manu_Itns', scale=mean(pop),
+        scatter_data(data.llin_manu, c, 'country', 'manu_itns', scale=mean(pop),
                      error_val=1.96 * s_m.stats()['mean'], offset=.5)
     decorate_figure(ymax=.3)
 
@@ -516,20 +518,20 @@ def plot_posterior(c_id, c, pop,
     plot_fit(nd, style='steps', scale=pop)
     if len(admin_distribution_obs) > 0:
         label = 'Administrative Data'
-        scatter_data(data.admin_llin, c, 'Country', 'Program_LLINs', scale=mean(pop),
+        scatter_data(data.admin_llin, c, 'country', 'program_llins', scale=mean(pop),
                      error_val=1.96 * s_d.stats()['mean'], label=label, offset=.5)
     if len(household_distribution_obs) > 0:
         label = 'Survey Data'
-        scatter_data(data.hh_llin_flow, c, 'Country', 'Total_LLINs', scale=mean(pop),
-                     error_key='Total_st', fmt='bs',
+        scatter_data(data.hh_llin_flow, c, 'country', 'total_llins', scale=mean(pop),
+                     error_key='total_st', fmt='bs',
                      pi=pi.stats()['mean'],
                      label=label, offset=.5)
     legend(loc='upper left')
     decorate_figure(ymax=.3)
 
     for d in data.hh_llin_stock:
-        mean_survey_date = time.strptime(d['Mean_SvyDate'], '%d-%b-%y')
-        d['Year'] = mean_survey_date[0] + mean_survey_date[1]/12.
+        mean_survey_date = time.strptime(d['mean_svydate'], '%d-%b-%y')
+        d['year'] = mean_survey_date[0] + mean_survey_date[1]/12.
 
     subplot(rows, cols/2, 4*(cols/2)+1)
     title('ITN and LLIN coverage', fontsize=fontsize)
@@ -538,9 +540,9 @@ def plot_posterior(c_id, c, pop,
     if max(itn_coverage.stats()['mean']) > .1:
         hlines([80], 1999, 2009, linestyle='dotted', color='blue', alpha=.5)
 
-    scatter_data(data.llin_coverage, c, 'Country', 'coverage', 'coverage_se',
+    scatter_data(data.llin_coverage, c, 'country', 'coverage', 'coverage_se',
                  fmt='bs', scale=.01)
-    scatter_data(data.itn_coverage, c, 'Country', 'coverage', 'coverage_se',
+    scatter_data(data.itn_coverage, c, 'country', 'coverage', 'coverage_se',
                  fmt='r^', scale=.01)
     decorate_figure(ystr='At least one net (%)', ymax=80)
 
@@ -548,8 +550,8 @@ def plot_posterior(c_id, c, pop,
     title('ITNs and LLINs in households (per capita)', fontsize=fontsize)
     plot_fit(hh_itn, scale=pop)
     plot_fit(H, scale=pop, style='alt lines')
-    scatter_data(data.hh_llin_stock, c, 'Country', 'SvyIndex_LLINs', scale=mean(pop),
-                 error_key='SvyIndexLLINs_SE', fmt='bs')
+    scatter_data(data.hh_llin_stock, c, 'country', 'svyindex_llins', scale=mean(pop),
+                 error_key='svyindexllins_se', fmt='bs')
     decorate_figure(ymax=.3)
 
     savefig('bednets_%s_%d_%s.png' % (c, c_id, time.strftime('%Y_%m_%d_%H_%M')))

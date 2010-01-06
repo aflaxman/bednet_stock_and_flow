@@ -172,18 +172,18 @@ def main(country_id):
 
     manufacturing_obs = []
     for d in data.llin_manu:
-        if d['Country'] != c:
+        if d['country'] != c:
             continue
 
         @observed
-        @stochastic(name='manufactured_%s_%s' % (d['Country'], d['Year']))
-        def obs(value=max(1., float(d['Manu_Itns'])), year=int(d['Year']), mu=mu, s_m=s_m):
+        @stochastic(name='manufactured_%s_%s' % (d['country'], d['year']))
+        def obs(value=max(1., float(d['manu_itns'])), year=int(d['year']), mu=mu, s_m=s_m):
             return normal_like(log(value),  log(max(1., mu[year - year_start])), 1. / s_m**2)
         manufacturing_obs.append(obs)
 
         # also take this opportinuty to set better initial values for the MCMC
         cur_val = copy.copy(mu.value)
-        cur_val[int(d['Year']) - year_start] = min(d['Manu_Itns'], 10.)
+        cur_val[int(d['year']) - year_start] = min(d['manu_itns'], 10.)
         log_mu.value = log(maximum(1., cur_val))
 
     vars += [manufacturing_obs]
@@ -194,19 +194,19 @@ def main(country_id):
 
     admin_distribution_obs = []
     for d in data.admin_llin:
-        if d['Country'] != c:
+        if d['country'] != c:
             continue
 
         @observed
-        @stochastic(name='administrative_distribution_%s_%s' % (d['Country'], d['Year']))
-        def obs(value=d['Program_LLINs'], year=int(d['Year']),
+        @stochastic(name='administrative_distribution_%s_%s' % (d['country'], d['year']))
+        def obs(value=d['program_llins'], year=int(d['year']),
                 delta=delta, s_d=s_d, e_d=e_d):
             return normal_like(log(value), e_d + log(max(1., delta[year - year_start])), 1. / s_d**2)
         admin_distribution_obs.append(obs)
 
         # also take this opportinuty to set better initial values for the MCMC
         cur_val = copy.copy(delta.value)
-        cur_val[int(d['Year']) - year_start] = d['Program_LLINs']
+        cur_val[int(d['year']) - year_start] = d['program_llins']
         log_delta.value = log(cur_val)
 
     vars += [admin_distribution_obs]
@@ -216,19 +216,19 @@ def main(country_id):
 
     household_distribution_obs = []
     for d in data.hh_llin_flow:
-        if d['Country'] != c:
+        if d['country'] != c:
             continue
 
-        d2_i = d['Total_LLINs']
-        estimate_year = int(d['Year'])
+        d2_i = d['total_llins']
+        estimate_year = int(d['year'])
         
-        mean_survey_date = time.strptime(d['Mean_SvyDate'], '%d-%b-%y')
+        mean_survey_date = time.strptime(d['mean_svydate'], '%d-%b-%y')
         survey_year = mean_survey_date[0] + mean_survey_date[1]/12.
 
-        s_d2_i = float(d['Total_st'])
+        s_d2_i = float(d['total_st'])
 
         @observed
-        @stochastic(name='household_distribution_%s_%s' % (d['Country'], d['Year']))
+        @stochastic(name='household_distribution_%s_%s' % (d['country'], d['year']))
         def obs(value=d2_i,
                 estimate_year=estimate_year,
                 survey_year=survey_year,
@@ -251,16 +251,16 @@ def main(country_id):
     ### net stock in households (from survey)
     household_stock_obs = []
     for d in data.hh_llin_stock:
-        if d['Country'] != c:
+        if d['country'] != c:
             continue
-        mean_survey_date = time.strptime(d['Mean_SvyDate'], '%d-%b-%y')
-        d['Year'] = mean_survey_date[0] + mean_survey_date[1]/12.
+        mean_survey_date = time.strptime(d['mean_svydate'], '%d-%b-%y')
+        d['year'] = mean_survey_date[0] + mean_survey_date[1]/12.
 
         @observed
-        @stochastic(name='LLIN_HH_Stock_%s_%s' % (d['Country'], d['Survey_Year2']))
-        def obs(value=d['SvyIndex_LLINs'],
-                year=d['Year'],
-                std_err=d['SvyIndexLLINs_SE'],
+        @stochastic(name='LLIN_HH_Stock_%s_%s' % (d['country'], d['survey_year2']))
+        def obs(value=d['svyindex_llins'],
+                year=d['year'],
+                std_err=d['svyindexllins_se'],
                 Theta=Theta):
             year_part = year-floor(year)
             Theta_i = (1-year_part) * Theta[floor(year)-year_start] + year_part * Theta[ceil(year)-year_start]
@@ -273,37 +273,37 @@ def main(country_id):
     ### llin and itn coverage (from survey and survey reports)
     coverage_obs = []
     for d in data.llin_coverage:
-        if d['Country'] != c:
+        if d['country'] != c:
             continue
 
-        if d['LLINs0_SE']: # data from survey, includes standard error
-            d['coverage'] = 1. - float(d['Per_0LLINs'])
-            d['coverage_se'] = float(d['LLINs0_SE'])
-            mean_survey_date = time.strptime(d['Mean_SvyDate'], '%d-%b-%y')
-            d['Year'] = mean_survey_date[0] + mean_survey_date[1]/12.
+        if d['llins0_se']: # data from survey, includes standard error
+            d['coverage'] = 1. - float(d['per_0llins'])
+            d['coverage_se'] = float(d['llins0_se'])
+            mean_survey_date = time.strptime(d['mean_svydate'], '%d-%b-%y')
+            d['year'] = mean_survey_date[0] + mean_survey_date[1]/12.
             
             @observed
-            @stochastic(name='LLIN_Coverage_%s_%s' % (d['Country'], d['Survey_Year2']))
+            @stochastic(name='LLIN_Coverage_%s_%s' % (d['country'], d['survey_year2']))
             def obs(value=d['coverage'],
-                    year=d['Survey_Year2'],
+                    year=d['survey_year2'],
                     std_err=d['coverage_se'],
                     coverage=llin_coverage):
                 year_part = year-floor(year)
                 coverage_i = (1-year_part) * coverage[floor(year)-year_start] + year_part * coverage[ceil(year)-year_start]
                 return normal_like(value, coverage_i, 1. / std_err**2)
         else: # data is imputed from under 5 usage, so estimate standard error
-            d['coverage'] = 1. - float(d['Per_0LLINs'])
-            N = d['Sample_Size'] or 1000
+            d['coverage'] = 1. - float(d['per_0llins'])
+            N = d['sample_size'] or 1000
             d['sampling_error'] = d['coverage']*(1-d['coverage'])/sqrt(N)
             d['coverage_se'] = d['sampling_error']*gamma.value
 
-            mean_survey_date = time.strptime(d['Mean_SvyDate'], '%d-%b-%y')
-            d['Year'] = mean_survey_date[0] + mean_survey_date[1]/12.
+            mean_survey_date = time.strptime(d['mean_svydate'], '%d-%b-%y')
+            d['year'] = mean_survey_date[0] + mean_survey_date[1]/12.
 
             @observed
-            @stochastic(name='LLIN_Coverage_Imputation_%s_%s' % (d['Country'], d['Year']))
+            @stochastic(name='LLIN_Coverage_Imputation_%s_%s' % (d['country'], d['year']))
             def obs(value=d['coverage'],
-                    year=d['Year'],
+                    year=d['year'],
                     sampling_error=d['sampling_error'],
                     design_factor=gamma,
                     coverage=llin_coverage):
@@ -314,21 +314,21 @@ def main(country_id):
             
 
     for d in data.itn_coverage:
-        if d['Country'] != c:
+        if d['country'] != c:
             continue
 
-        d['coverage'] = 1. - float(d['Per_0ITNs'])
+        d['coverage'] = 1. - float(d['per_0itns'])
 
-        if d['ITNs0_SE']: # data from survey, includes standard error
-            d['coverage_se'] = d['ITNs0_SE']
+        if d['itns0_se']: # data from survey, includes standard error
+            d['coverage_se'] = d['itns0_se']
 
-            mean_survey_date = time.strptime(d['Mean_SvyDate'], '%d-%b-%y')
-            d['Year'] = mean_survey_date[0] + mean_survey_date[1]/12.
+            mean_survey_date = time.strptime(d['mean_svydate'], '%d-%b-%y')
+            d['year'] = mean_survey_date[0] + mean_survey_date[1]/12.
 
             @observed
-            @stochastic(name='ITN_Coverage_%s_%s' % (d['Country'], d['Year']))
+            @stochastic(name='ITN_Coverage_%s_%s' % (d['country'], d['year']))
             def obs(value=d['coverage'],
-                    year=d['Year'],
+                    year=d['year'],
                     std_err=d['coverage_se'],
                     coverage=itn_coverage):
                 year_part = year-floor(year)
@@ -336,17 +336,17 @@ def main(country_id):
                 return normal_like(value, coverage_i, 1. / std_err**2)
 
         else: # data from survey report, must calculate standard error
-            mean_survey_date = time.strptime(d['Mean_SvyDate'], '%d-%b-%y')
-            d['Year'] = mean_survey_date[0] + mean_survey_date[1]/12.
+            mean_survey_date = time.strptime(d['mean_svydate'], '%d-%b-%y')
+            d['year'] = mean_survey_date[0] + mean_survey_date[1]/12.
 
-            N = d['Sample_Size'] or 1000
+            N = d['sample_size'] or 1000
             d['sampling_error'] = d['coverage']*(1-d['coverage'])/sqrt(N)
             d['coverage_se'] = d['sampling_error']*gamma.value
 
             @observed
-            @stochastic(name='ITN_Coverage_Report_%s_%s' % (d['Country'], d['Year']))
+            @stochastic(name='ITN_Coverage_Report_%s_%s' % (d['country'], d['year']))
             def obs(value=d['coverage'],
-                    year=d['Year'],
+                    year=d['year'],
                     sampling_error=d['sampling_error'],
                     design_factor=gamma,
                     coverage=itn_coverage):
@@ -358,7 +358,7 @@ def main(country_id):
 
 
         # also take this opportinuty to set better initial values for the MCMC
-        t = floor(d['Year'])-year_start
+        t = floor(d['year'])-year_start
         cur_val = copy.copy(Omega.value)
         cur_val[t] = max(.0001*pop[t], log(1-d['coverage']) * pop[t] / eta.value - Theta.value[t])
         log_Omega.value = log(cur_val)
