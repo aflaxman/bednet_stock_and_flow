@@ -12,6 +12,13 @@ import copy
 from data import Data
 data = Data()
 
+def my_savefig(fname):
+    try:
+        savefig(fname)
+    except:
+        print 'error saving figure'
+        
+
 def plot_discard_prior(pi, discard_prior):
     """ Generate a plot of the hyper-prior and empirical prior discard
     rate
@@ -65,8 +72,8 @@ def plot_discard_prior(pi, discard_prior):
     xlabel('Annual Risk of LLIN Loss')
     ylabel('Probability Density')
 
-    savefig('discard_prior.png')
-    savefig('discard_prior.eps')
+    my_savefig('discard_prior.png')
+    my_savefig('discard_prior.eps')
 
 def plot_survey_design_prior(design_prior, data_vals):
     """ Generate a plot of the empirical prior for survey design effect
@@ -98,8 +105,8 @@ def plot_survey_design_prior(design_prior, data_vals):
     xlabel('Survey Design Effect')
     ylabel('Probability Density')
 
-    savefig('survey_design_effect_prior.png')
-    savefig('survey_design_effect_prior.eps')
+    my_savefig('survey_design_effect_prior.png')
+    my_savefig('survey_design_effect_prior.eps')
 
     
 def plot_admin_priors(eps, sigma, admin_priors, data_dict):
@@ -156,8 +163,8 @@ def plot_admin_priors(eps, sigma, admin_priors, data_dict):
     xlabel('Error in Admin LLIN flow')
     ylabel('Probability Density')
 
-    savefig('admin_priors.png')
-    savefig('admin_priors.eps')
+    my_savefig('admin_priors.png')
+    my_savefig('admin_priors.eps')
 
     figure(figsize=(8.5,8.5), dpi=settings.DPI)
 
@@ -192,8 +199,8 @@ def plot_admin_priors(eps, sigma, admin_priors, data_dict):
     #    d = data_dict[k]
     #    text(d['truth'], d['obs'], ' %s, %s' % k, fontsize=12, alpha=.5, verticalalignment='center')
 
-    savefig('admin_scatter.png')
-    savefig('admin_scatter.eps')
+    my_savefig('admin_scatter.png')
+    my_savefig('admin_scatter.eps')
 
 
 def plot_neg_binom_priors(eta, alpha, factor_priors, data_dict):
@@ -250,8 +257,8 @@ def plot_neg_binom_priors(eta, alpha, factor_priors, data_dict):
     xlabel('Dispersion Parameter')
     ylabel('probability density')
     
-    savefig('neg_binom_priors.png')
-    savefig('neg_binom_priors.eps')
+    my_savefig('neg_binom_priors.png')
+    my_savefig('neg_binom_priors.eps')
 
 def plot_neg_binom_fits():
     """ Generate figure that demonstrates how suitable the
@@ -307,8 +314,8 @@ def plot_neg_binom_fits():
             yticks([])
             
         axis([0, 4, .1, 100])
-    savefig('neg_binom_fits.png')
-    savefig('neg_binom_fits.eps')
+    my_savefig('neg_binom_fits.png')
+    my_savefig('neg_binom_fits.eps')
     print mean(error_list)
     
 def plot_posterior(c_id, c, pop,
@@ -554,7 +561,7 @@ def plot_posterior(c_id, c, pop,
                  error_key='svyindexllins_se', fmt='bs')
     decorate_figure(ymax=.3)
 
-    savefig('bednets_%s_%d_%s.png' % (c, c_id, time.strftime('%Y_%m_%d_%H_%M')))
+    my_savefig('bednets_%s_%d_%s.png' % (c, c_id, time.strftime('%Y_%m_%d_%H_%M')))
     
 if __name__ == '__main__':
     plot_neg_binom_fits()
