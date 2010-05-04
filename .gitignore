@@ -5,4 +5,5 @@
 *.json
 *.eps
 *.pickle
+fontList.cache
 local_settings.py
