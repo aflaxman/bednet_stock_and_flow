@@ -73,8 +73,10 @@ def load_csv(fname):
     # make sure all floats are floats
     for d in data:
         for k in d.keys():
+            d[k.lower()] = d[k]
             try:
                 d[k] = float(d[k].replace(',',''))
+                d[k.lower()] = d[k]
             except ValueError:
                 pass
 

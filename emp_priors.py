@@ -46,8 +46,8 @@ def llin_discard_rate(recompute=False):
     for d in data.retention:
         @observed
         @stochastic(name='retention_%s_%s' % (d['Name'], d['Year']))
-        def obs(value=d['Retention_Rate'],
-                T_i=d['Follow_up_Time'],
+        def obs(value=d['retention_rate'],
+                T_i=d['follow_up_time'],
                 pi=pi, sigma=sigma):
             return normal_like(value, (1. - pi) ** T_i, 1. / sigma**2)
         retention_obs.append(obs)
@@ -107,14 +107,14 @@ def admin_err_and_bias(recompute=False):
     data_dict = {}
     # store admin data for each country-year
     for d in data.admin_llin:
-        key = (d['Country'], d['Year'])
+        key = (d['country'], d['year'])
         if not data_dict.has_key(key):
             data_dict[key] = {}
         data_dict[key]['obs'] = d['Program_LLINs']
 
     # store household data for each country-year
     for d in data.hh_llin_flow:
-        key = (d['Country'], d['Year'])
+        key = (d['country'], d['year'])
         if not data_dict.has_key(key):
             data_dict[key] = {}
         data_dict[key]['time'] =  d['mean_survey_date'] - (d['Year'] + .5)
@@ -192,21 +192,21 @@ def neg_binom(recompute=False):
 
     # store population data for each country-year
     for d in data.population:
-        key = (d['Country'], d['Year'])
+        key = (d['country'], d['year'])
         data_dict[key] = {}
-        data_dict[key]['pop'] =  d['Pop']*1000
+        data_dict[key]['pop'] =  d['pop']*1000
 
     # store stock data for each country-year
     for d in data.hh_llin_stock:
-        key = (d['Country'], d['Survey_Year1'])
-        data_dict[key]['stock'] = d['SvyIndex_LLINs'] / data_dict[key]['pop']
-        data_dict[key]['stock_se'] = d['SvyIndexLLINs_SE'] / data_dict[key]['pop']
+        key = (d['country'], d['survey_year1'])
+        data_dict[key]['stock'] = d['svyindex_llins'] / data_dict[key]['pop']
+        data_dict[key]['stock_se'] = d['svyindexllins_se'] / data_dict[key]['pop']
 
     # store coverage data for each country-year
     for d in data.llin_coverage:
-        key = (d['Country'], d['Survey_Year1'])
-        data_dict[key]['uncovered'] =  d['Per_0LLINs']
-        data_dict[key]['se'] = d['LLINs0_SE']
+        key = (d['country'], d['survey_year1'])
+        data_dict[key]['uncovered'] =  d['per_0llins']
+        data_dict[key]['se'] = d['llins0_se']
         
     # keep only country-years with both stock and coverage
     for key in data_dict.keys():
