@@ -14,7 +14,7 @@ data = Data()
 
 def my_savefig(fname):
     try:
-        savefig(fname)
+        savefig(settings.PATH + fname)
     except:
         print 'error saving figure'
         
@@ -396,7 +396,7 @@ def plot_posterior(c_id, c, pop,
         if ymax:
             t = ymax*1.2
         vlines(range(year_start,year_end), 0, t, color=(0,0,0), alpha=.3)
-        axis([year_start, 2009, 0, t])
+        axis([year_start, year_end, 0, t])
         ylabel(ystr, fontsize=fontsize)
         xticks([1999.5, 2001.5, 2003.5, 2005.5, 2007.5], ['1999', '2001', '2003', '2005', '2007'], fontsize=fontsize)
 

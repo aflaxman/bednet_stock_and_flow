@@ -55,7 +55,7 @@ def llin_discard_rate(recompute=False):
         vars += [retention_obs]
 
     # find model with MCMC
-    mc = MCMC(vars, verbose=1, db='pickle', dbname='discard_prior_%s.pickle' % time.strftime('%Y_%m_%d_%H_%M'))
+    mc = MCMC(vars, verbose=1, db='pickle', dbname=settings.PATH + 'discard_prior_%s.pickle' % time.strftime('%Y_%m_%d_%H_%M'))
     iter = 10000
     thin = 20
     burn = 20000
@@ -138,7 +138,7 @@ def admin_err_and_bias(recompute=False):
         vars.append(obs)
 
     # sample from empirical prior distribution via MCMC
-    mc = MCMC(vars, verbose=1, db='pickle', dbname='admin_err_prior_%s.pickle' % time.strftime('%Y_%m_%d_%H_%M'))
+    mc = MCMC(vars, verbose=1, db='pickle', dbname=settings.PATH + 'admin_err_prior_%s.pickle' % time.strftime('%Y_%m_%d_%H_%M'))
     iter = 10000
     thin = 20
     burn = 20000
@@ -227,7 +227,7 @@ def neg_binom(recompute=False):
         vars += [stock, obs]
 
     # sample from empirical prior distribution via MCMC
-    mc = MCMC(vars, verbose=1, db='pickle', dbname='neg_binom_prior_%s.pickle' % time.strftime('%Y_%m_%d_%H_%M'))
+    mc = MCMC(vars, verbose=1, db='pickle', dbname=settings.PATH + 'neg_binom_prior_%s.pickle' % time.strftime('%Y_%m_%d_%H_%M'))
     iter = 1000
     thin = 20
     burn = 2000
