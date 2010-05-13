@@ -72,11 +72,15 @@ def load_csv(fname):
 
     # make sure all floats are floats
     for d in data:
+        # ensure that all keys are lowercase
         for k in d.keys():
-            d[k.lower()] = d[k]
+            val = d.pop(k)
+            d[k.lower()] = val
+
+        # convert all numeric data to floats
+        for k in d.keys():
             try:
                 d[k] = float(d[k].replace(',',''))
-                d[k.lower()] = d[k]
             except ValueError:
                 pass
 

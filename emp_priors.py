@@ -45,7 +45,7 @@ def llin_discard_rate(recompute=False):
     retention_obs = []
     for d in data.retention:
         @observed
-        @stochastic(name='retention_%s_%s' % (d['Name'], d['Year']))
+        @stochastic(name='retention_%s_%s' % (d['name'], d['year']))
         def obs(value=d['retention_rate'],
                 T_i=d['follow_up_time'],
                 pi=pi, sigma=sigma):
@@ -110,16 +110,17 @@ def admin_err_and_bias(recompute=False):
         key = (d['country'], d['year'])
         if not data_dict.has_key(key):
             data_dict[key] = {}
-        data_dict[key]['obs'] = d['Program_LLINs']
+
+        data_dict[key]['obs'] = d['program_llins']
 
     # store household data for each country-year
     for d in data.hh_llin_flow:
         key = (d['country'], d['year'])
         if not data_dict.has_key(key):
             data_dict[key] = {}
-        data_dict[key]['time'] =  d['mean_survey_date'] - (d['Year'] + .5)
-        data_dict[key]['truth'] = d['Total_LLINs'] / (1-mu_pi)**data_dict[key]['time']
-        data_dict[key]['se'] = d['Total_st']
+        data_dict[key]['time'] =  d['mean_survey_date'] - (d['year'] + .5)
+        data_dict[key]['truth'] = d['total_llins'] / (1-mu_pi)**data_dict[key]['time']
+        data_dict[key]['se'] = d['total_st']
         
     # keep only country-years with both admin and survey data
     for key in data_dict.keys():
