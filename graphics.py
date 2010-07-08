@@ -109,7 +109,28 @@ def plot_survey_design_prior(design_prior, data_vals):
     my_savefig('survey_design_effect_prior.eps')
 
     
-def plot_admin_priors(eps, sigma, admin_priors, data_dict):
+def plot_admin_priors(eps, sigma, admin_priors, data_dict, data_vars, mc):
+
+    # plot residuals for fit
+    figure(figsize=(8.5,8.5), dpi=settings.DPI)
+    data_vars = sorted(data_vars, key=lambda x: x[0].value)
+    x = [obs.value for obs, pred in data_vars]
+    y = [obs.value-pred.stats()['mean'] for obs, pred in data_vars]
+    yerr = [obs.value - pred.stats()['95% HPD interval'] for obs, pred in data_vars]
+
+    plot(x, y, 'o')
+    plot(x, yerr, 'k-', alpha=.5)
+
+    figtext(0, 0, 'RMSE: %.3f; DIC: %.3f' % (sqrt(mean(array(y)**2)), mc.dic()))
+    title('survey llin flow vs residuals')
+    xlabel('log(llin flow)')
+    ylabel('log(llin flow) - prediction')
+    l,r,b,t=axis()
+    hlines([0], l, r)
+    my_savefig('admin_residuals.png')
+    my_savefig('admin_residuals.eps')
+
+
     figure(figsize=(8.5,4), dpi=settings.DPI)
 
     ## plot prior for eps
@@ -168,8 +189,8 @@ def plot_admin_priors(eps, sigma, admin_priors, data_dict):
 
     figure(figsize=(8.5,8.5), dpi=settings.DPI)
 
-    y = array([data_dict[k]['obs'] for k in sorted(data_dict.keys())])
-    x = array([data_dict[k]['truth'] for k in sorted(data_dict.keys())])
+    y = array([data_dict[k]['obs_t'] for k in sorted(data_dict.keys())])
+    x = array([data_dict[k]['survey'] for k in sorted(data_dict.keys())])
     y_e = array([data_dict[k]['se'] for k in sorted(data_dict.keys())])
     plot(x, y, 'o', alpha=.9)
     #errorbar(x, y, 1.96*y_e, fmt=',', alpha=.9, linewidth=1.5)
