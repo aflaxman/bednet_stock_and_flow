@@ -45,6 +45,8 @@ def main(country_id):
                  prior['eps']['mu'], prior['eps']['tau'])
     s_d = Normal('error in admin dist data',
                  prior['sigma']['mu'], prior['sigma']['tau'])
+    beta = Normal('relative weights of current year and previous year in admin dist data',
+                  prior['beta']['mu'], prior['beta']['tau'])
     vars += [s_d, e_d]
 
     prior = emp_priors.neg_binom()
@@ -146,14 +148,15 @@ def main(country_id):
         max_log_d = log(maximum(1.,[max(total_dist[:(i+1)]) for i in range(len(total_dist))]))
         amt_below_cap = minimum(log(maximum(total_dist,1.)) - max_log_d, 0.)
         return normal_like(amt_below_cap, 0., tau)
+    vars += [proven_capacity]
 
-    itn_composition_std = .5
-    @potential
-    def itn_composition(llin=Theta, non_llin=Omega, tau=itn_composition_std**-2):
-        frac_llin = llin / (llin + non_llin)
-        return normal_like(frac_llin[[0,1,2,6,7,8,9,10,11]],
-                           [0., 0., 0., 1., 1., 1., 1., 1., 1.], tau)
-    vars += [proven_capacity, itn_composition]
+#    itn_composition_std = .5
+#    @potential
+#    def itn_composition(llin=Theta, non_llin=Omega, tau=itn_composition_std**-2):
+#        frac_llin = llin / (llin + non_llin)
+#        return normal_like(frac_llin[[0,1,2,6,7,8,9,10,11]],
+#                           [0., 0., 0., 1., 1., 1., 1., 1., 1.], tau)
+#    vars += [itn_composition]
 
     smooth_std = .5
     @potential
@@ -192,21 +195,38 @@ def main(country_id):
 
     ### nets distributed in country (reported by NMCP)
 
-    admin_distribution_obs = []
+    ### extract data for likelihood stochs
+    data_dict = {}
+    for year in data.years:
+        data_dict[year] = {}
+
+    # store admin data for this country for each year
     for d in data.admin_llin:
         if d['country'] != c:
             continue
+        data_dict[d['year']]['obs_t'] = d['program_llins']
+        data_dict[d['year']+1]['obs_{t-1}'] = d['program_llins']
+        
+    # keep years with admin data for current year and previous year
+    for key in data_dict.keys():
+        if len(data_dict[key]) != 2:
+            data_dict.pop(key)
+
+    admin_distribution_obs = []
+    for year, d in data_dict.items():
 
         @observed
-        @stochastic(name='administrative_distribution_%s_%s' % (d['country'], d['year']))
-        def obs(value=d['program_llins'], year=int(d['year']),
-                delta=delta, s_d=s_d, e_d=e_d):
-            return normal_like(log(value), e_d + log(max(1., delta[year - year_start])), 1. / s_d**2)
+        @stochastic(name='administrative_distribution_%s' % year)
+        def obs(value=d, year=year,
+                delta=delta, s_d=s_d, e_d=e_d, beta=beta):
+            return normal_like(log(max(1., delta[year - year_start])),
+                               log(value['obs_{t-1}'] + beta * value['obs_t']) - e_d,
+                               1. / s_d**2)
         admin_distribution_obs.append(obs)
 
         # also take this opportinuty to set better initial values for the MCMC
         cur_val = copy.copy(delta.value)
-        cur_val[int(d['year']) - year_start] = d['program_llins']
+        cur_val[year - year_start] = d['obs_t']
         log_delta.value = log(cur_val)
 
     vars += [admin_distribution_obs]
@@ -389,7 +409,7 @@ def main(country_id):
         map.fit(method='fmin_powell', verbose=1)
 
         map = MAP([log_mu, log_delta, log_Omega,
-                   positive_stocks, itn_composition,
+                   positive_stocks, #itn_composition,
                    coverage_obs])
         map.fit(method='fmin_powell', verbose=1)
 
