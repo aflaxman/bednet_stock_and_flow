@@ -101,42 +101,56 @@ def admin_err_and_bias(recompute=False):
     # setup hyper-prior stochs
     sigma = Gamma('error in admin dist data', 1., 1.)
     eps = Normal('bias in admin dist data', 0., 1.)
-    vars = [sigma, eps]
+    beta = Uniform('relative weight', 0., 2., value=.1)
+    vars = [sigma, eps, beta]
 
     ### setup data likelihood stochs
     data_dict = {}
+    for country in data.countries:
+        for year in data.years:
+            data_dict[(country, year)] = {}
+
     # store admin data for each country-year
     for d in data.admin_llin:
-        key = (d['country'], d['year'])
-        if not data_dict.has_key(key):
-            data_dict[key] = {}
-
-        data_dict[key]['obs'] = d['program_llins']
+        # only use select country-years to produce admin/survey err and bias priors
+        if  d['year'] in [2005, 2006, 2007, 2008, 2009]:
+            key = (d['country'], d['year'])
+            data_dict[key]['obs_t'] = d['program_llins']
+            
+            key = (d['country'], d['year']+1)
+            data_dict[key]['obs_{t-1}'] = d['program_llins']
 
     # store household data for each country-year
     for d in data.hh_llin_flow:
         key = (d['country'], d['year'])
-        if not data_dict.has_key(key):
-            data_dict[key] = {}
-        data_dict[key]['time'] =  d['mean_survey_date'] - (d['year'] + .5)
-        data_dict[key]['truth'] = d['total_llins'] / (1-mu_pi)**data_dict[key]['time']
+        data_dict[key]['t'] =  d['mean_survey_date'] - (d['year'] + .5)
+        data_dict[key]['survey'] = d['total_llins']
         data_dict[key]['se'] = d['total_st']
         
     # keep only country-years with both admin and survey data
     for key in data_dict.keys():
-        if len(data_dict[key]) != 4:
+        if len(data_dict[key]) != 5:
             data_dict.pop(key)
 
+    print 'fitting %d data points' % len(data_dict)
+
     # create the observed stochs
-    for d in data_dict.values():
+    data_vars = []
+    for k, d in data_dict.items():
+        @deterministic(name='pred_%s'%str(k))
+        def pred(obs=d['obs_t'], obs_prev=d['obs_{t-1}'], eps=eps, beta=beta):
+            return log(obs_prev + beta*obs) - eps
+
         @observed
-        @stochastic
-        def obs(value=log(d['obs']), log_truth=log(d['truth']),
-                log_v=1.1*d['se']**2/d['truth']**2,
-                eps=eps, sigma=sigma):
-            return normal_like(value, log_truth + eps,
+        @stochastic(name='obs_%s'%str(k))
+        def obs(value=log(d['survey']),
+                pred=pred,
+                log_v=1.1*d['se']**2/d['survey']**2,
+                sigma=sigma):
+            return normal_like(value, pred,
                                1. / (log_v + sigma**2))
-        vars.append(obs)
+        data_vars.append([obs, pred])
+    vars.append(data_vars)
 
     # sample from empirical prior distribution via MCMC
     mc = MCMC(vars, verbose=1, db='pickle', dbname=settings.PATH + 'admin_err_prior_%s.pickle' % time.strftime('%Y_%m_%d_%H_%M'))
@@ -153,12 +167,15 @@ def admin_err_and_bias(recompute=False):
                    tau=sigma.stats()['standard deviation']**-2),
         eps=dict(mu=eps.stats()['mean'],
                  std=eps.stats()['standard deviation'],
-                 tau=eps.stats()['standard deviation']**-2))
+                 tau=eps.stats()['standard deviation']**-2),
+        beta=dict(mu=beta.stats()['mean'],
+                  std=beta.stats()['standard deviation'],
+                  tau=beta.stats()['standard deviation']**-2))
 
     f = open(settings.PATH + fname, 'w')
     json.dump(emp_prior_dict, f)
 
-    graphics.plot_admin_priors(eps, sigma, emp_prior_dict, data_dict)
+    graphics.plot_admin_priors(eps, sigma, emp_prior_dict, data_dict, data_vars, mc)
 
     return emp_prior_dict
 
@@ -290,8 +307,8 @@ if __name__ == '__main__':
     if len(args) != 0:
         parser.error('incorrect number of arguments')
 
-    llin_discard_rate(recompute=True)
     admin_err_and_bias(recompute=True)
+    llin_discard_rate(recompute=True)
     neg_binom(recompute=True)
     survey_design(recompute=True)
     
