@@ -33,6 +33,7 @@ class Data:
         self.population = load_csv('pop.csv')
 
         self.countries = set([d['country'] for d in self.population])
+        self.years = range(settings.year_start, settings.year_end)
 
     def population_for(self, c, year_start, year_end):
         pop_vec = zeros(year_end - year_start)
@@ -74,7 +75,7 @@ def load_csv(fname):
     for d in data:
         # ensure that all keys are lowercase
         for k in d.keys():
-            val = d.pop(k)
+            val = d.pop(k).strip()
             d[k.lower()] = val
 
         # convert all numeric data to floats
