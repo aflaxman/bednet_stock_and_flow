@@ -207,10 +207,10 @@ def main(country_id):
 
         @observed
         @stochastic(name='administrative_distribution_%s' % year)
-        def obs(value=d, year=year,
+        def obs(value=log(d), year=year,  # d should maybe be log(d)
                 delta=delta, s_d=s_d, e_d=e_d, beta=beta):
-            mu = log(max(1., delta[year - year_start] + beta*delta[year+1 - year_start])) + e_d
-            return normal_like(value, mu, 1. / s_d**2)
+            pred = log(max(1., delta[year - year_start] + beta*delta[year+1 - year_start])) + e_d
+            return normal_like(value, pred, 1. / s_d**2)
         admin_distribution_obs.append(obs)
 
         # also take this opportinuty to set better initial values for the MCMC
