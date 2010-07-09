@@ -17,7 +17,7 @@ METHOD = 'MCMC'
 
 # global model parameters
 year_start = 1999
-year_end = 2011
+year_end = 2013
 
 # matplotlib backend setup
 import matplotlib

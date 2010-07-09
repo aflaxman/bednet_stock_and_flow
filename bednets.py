@@ -45,9 +45,9 @@ def main(country_id):
                  prior['eps']['mu'], prior['eps']['tau'])
     s_d = Normal('error in admin dist data',
                  prior['sigma']['mu'], prior['sigma']['tau'])
-    beta = Normal('relative weights of current year and previous year in admin dist data',
+    beta = Normal('relative weights of next year to current year in admin dist data',
                   prior['beta']['mu'], prior['beta']['tau'])
-    vars += [s_d, e_d]
+    vars += [s_d, e_d, beta]
 
     prior = emp_priors.neg_binom()
     eta = Normal('coverage parameter', prior['eta']['mu'], prior['eta']['tau'], value=prior['eta']['mu'])
@@ -195,23 +195,13 @@ def main(country_id):
 
     ### nets distributed in country (reported by NMCP)
 
-    ### extract data for likelihood stochs
-    data_dict = {}
-    for year in data.years:
-        data_dict[year] = {}
-
     # store admin data for this country for each year
+    data_dict = {}
     for d in data.admin_llin:
         if d['country'] != c:
             continue
-        data_dict[d['year']]['obs_t'] = d['program_llins']
-        data_dict[d['year']+1]['obs_{t-1}'] = d['program_llins']
+        data_dict[d['year']] = d['program_llins']
         
-    # keep years with admin data for current year and previous year
-    for key in data_dict.keys():
-        if len(data_dict[key]) != 2:
-            data_dict.pop(key)
-
     admin_distribution_obs = []
     for year, d in data_dict.items():
 
@@ -219,14 +209,13 @@ def main(country_id):
         @stochastic(name='administrative_distribution_%s' % year)
         def obs(value=d, year=year,
                 delta=delta, s_d=s_d, e_d=e_d, beta=beta):
-            return normal_like(log(max(1., delta[year - year_start])),
-                               log(value['obs_{t-1}'] + beta * value['obs_t']) - e_d,
-                               1. / s_d**2)
+            mu = log(max(1., delta[year - year_start] + beta*delta[year+1 - year_start])) + e_d
+            return normal_like(value, mu, 1. / s_d**2)
         admin_distribution_obs.append(obs)
 
         # also take this opportinuty to set better initial values for the MCMC
         cur_val = copy.copy(delta.value)
-        cur_val[year - year_start] = d['obs_t']
+        cur_val[year - year_start] = d
         log_delta.value = log(cur_val)
 
     vars += [admin_distribution_obs]
@@ -417,7 +406,7 @@ def main(country_id):
             print '%s: %s' % (str(stoch), str(stoch.value))
 
     if settings.METHOD == 'MCMC':
-        mc = MCMC(vars, verbose=1, db='pickle', dbname='bednet_model_%s_%d_%s.pickle' % (c, country_id, time.strftime('%Y_%m_%d_%H_%M')))
+        mc = MCMC(vars, verbose=1, db='pickle', dbname=settings.PATH + 'bednet_model_%s_%d_%s.pickle' % (c, country_id, time.strftime('%Y_%m_%d_%H_%M')))
         mc.use_step_method(Metropolis, s_m, proposal_sd=.001)
         mc.use_step_method(Metropolis, eta, proposal_sd=.001)
 

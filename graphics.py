@@ -190,8 +190,8 @@ def plot_admin_priors(eps, sigma, admin_priors, data_dict, data_vars, mc):
     figure(figsize=(8.5,8.5), dpi=settings.DPI)
 
     y = array([data_dict[k]['obs_t'] for k in sorted(data_dict.keys())])
-    x = array([data_dict[k]['survey'] for k in sorted(data_dict.keys())])
-    y_e = array([data_dict[k]['se'] for k in sorted(data_dict.keys())])
+    x = array([data_dict[k]['true_t'] for k in sorted(data_dict.keys())])
+    #y_e = array([data_dict[k]['se'] for k in sorted(data_dict.keys())])
     plot(x, y, 'o', alpha=.9)
     #errorbar(x, y, 1.96*y_e, fmt=',', alpha=.9, linewidth=1.5)
     
@@ -419,7 +419,7 @@ def plot_posterior(c_id, c, pop,
         vlines(range(year_start,year_end), 0, t, color=(0,0,0), alpha=.3)
         axis([year_start, year_end, 0, t])
         ylabel(ystr, fontsize=fontsize)
-        xticks([1999.5, 2001.5, 2003.5, 2005.5, 2007.5], ['1999', '2001', '2003', '2005', '2007'], fontsize=fontsize)
+        xticks(arange(year_start, year_end, 2)+.5, range(year_start, year_end, 2), fontsize=fontsize)
 
     def my_hist(stoch):
         """ Plot a histogram of the posterior distribution of a stoch"""
@@ -534,12 +534,13 @@ def plot_posterior(c_id, c, pop,
     if len(manufacturing_obs) > 0:
         scatter_data(data.llin_manu, c, 'country', 'manu_itns', scale=mean(pop),
                      error_val=1.96 * s_m.stats()['mean'], offset=.5)
-    decorate_figure(ymax=.3)
+    ymax=.4
+    decorate_figure(ymax=ymax)
 
     subplot(rows, cols/2, 1*(cols/2)+1)
     title('LLINs in country, not in households (per capita)', fontsize=fontsize)
     plot_fit(W, scale=pop)
-    decorate_figure(ymax=.3)
+    decorate_figure(ymax=ymax)
 
     subplot(rows, cols/2, 2*(cols/2)+1)
     title('LLINs distributed (per capita)', fontsize=fontsize)
@@ -555,7 +556,7 @@ def plot_posterior(c_id, c, pop,
                      pi=pi.stats()['mean'],
                      label=label, offset=.5)
     legend(loc='upper left')
-    decorate_figure(ymax=.3)
+    decorate_figure(ymax=ymax)
 
     for d in data.hh_llin_stock:
         mean_survey_date = time.strptime(d['mean_svydate'], '%d-%b-%y')
@@ -580,7 +581,7 @@ def plot_posterior(c_id, c, pop,
     plot_fit(H, scale=pop, style='alt lines')
     scatter_data(data.hh_llin_stock, c, 'country', 'svyindex_llins', scale=mean(pop),
                  error_key='svyindexllins_se', fmt='bs')
-    decorate_figure(ymax=.3)
+    decorate_figure(ymax=ymax)
 
     my_savefig('bednets_%s_%d_%s.png' % (c, c_id, time.strftime('%Y_%m_%d_%H_%M')))
     

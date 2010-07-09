@@ -76,7 +76,30 @@ def llin_discard_rate(recompute=False):
     return emp_prior_dict
 
 
-def admin_err_and_bias(recompute=False):
+def improve_admin_err_and_bias_from_posterior():
+    """ Use the results of the posterior estimates to generate
+    improved estimates of the empirical priors for admin error and
+    bias.  This is analogous to a step in the EM algorithm.
+    """
+
+    # make a list of flow data dicts from output.csv
+    import csv
+    flow_data = []
+    for d in csv.DictReader(open(settings.PATH + 'output.csv')):
+        if d['Country'] in ['Liberia', 'SaoTome & Principe', 'Cameroon', 'Malawi', 'Madagascar']:
+            if int(d['Year']) >= 2007:
+                flow_data.append(dict(country=d['Country'],
+                                      year=int(d['Year']),
+                                      total_llins=float(d['LLINs Distributed (Thousands)'])*1000.,
+                                      total_st=(float(d['LLINs Shipped Lower CI'])-float(d['LLINs Shipped Upper CI'])) * 1000. / (2.*1.96)
+                                      ))
+
+    # recompute empirical priors
+    admin_err_and_bias(recompute=True, flow_data=flow_data)
+    
+                
+
+def admin_err_and_bias(recompute=False, flow_data=None):
     """ Return the empirical priors for the admin error and bias stochs,
     calculating them if necessary.
 
@@ -85,6 +108,15 @@ def admin_err_and_bias(recompute=False):
     recompute : bool, optional
       pass recompute=True to force recomputation of empirical priors,
       even if json file exists
+
+    flow_data : list of dicts, optional
+      this defaults to the household survey llin flow data, but for
+      more accurate borrowing of strength between regions, it can be
+      replaced.  each dict on the list needs 4 keys:
+        * country, lower case string
+        * year, int betweer settings.year_start and settings.year_end
+        * total_llins, float, number of llins distributed in this country-year
+        * total_st. float, standard error for estimated total_llins
 
     Results
     -------
@@ -112,20 +144,20 @@ def admin_err_and_bias(recompute=False):
 
     # store admin data for each country-year
     for d in data.admin_llin:
-        # only use select country-years to produce admin/survey err and bias priors
-        if  d['year'] in [2005, 2006, 2007, 2008, 2009]:
-            key = (d['country'], d['year'])
-            data_dict[key]['obs_t'] = d['program_llins']
-            
-            key = (d['country'], d['year']+1)
-            data_dict[key]['obs_{t-1}'] = d['program_llins']
+        key = (d['country'], d['year'])
+        data_dict[key]['obs_t'] = d['program_llins']
 
     # store household data for each country-year
-    for d in data.hh_llin_flow:
+    if flow_data == None:
+        flow_data = data.hh_llin_flow
+    for d in flow_data:
         key = (d['country'], d['year'])
-        data_dict[key]['t'] =  d['mean_survey_date'] - (d['year'] + .5)
-        data_dict[key]['survey'] = d['total_llins']
-        data_dict[key]['se'] = d['total_st']
+        data_dict[key]['true_t'] = d['total_llins']
+        data_dict[key]['se_t'] = d['total_st']
+
+        key = (d['country'], d['year']-1)
+        data_dict[key]['true_{t+1}'] = d['total_llins']
+        data_dict[key]['se_{t+1}'] = d['total_st']
         
     # keep only country-years with both admin and survey data
     for key in data_dict.keys():
@@ -138,14 +170,14 @@ def admin_err_and_bias(recompute=False):
     data_vars = []
     for k, d in data_dict.items():
         @deterministic(name='pred_%s'%str(k))
-        def pred(obs=d['obs_t'], obs_prev=d['obs_{t-1}'], eps=eps, beta=beta):
-            return log(obs_prev + beta*obs) - eps
+        def pred(mu=d['true_t'], mu_next=d['true_{t+1}'], eps=eps, beta=beta):
+            return log(max(1., mu + beta*mu_next)) + eps
 
         @observed
         @stochastic(name='obs_%s'%str(k))
-        def obs(value=log(d['survey']),
+        def obs(value=log(d['obs_t']),
                 pred=pred,
-                log_v=1.1*d['se']**2/d['survey']**2,
+                log_v=1.1*d['se_t']**2/d['true_t']**2 + 1.1*d['se_{t+1}']**2/d['true_{t+1}']**2,
                 sigma=sigma):
             return normal_like(value, pred,
                                1. / (log_v + sigma**2))
@@ -307,9 +339,9 @@ if __name__ == '__main__':
     if len(args) != 0:
         parser.error('incorrect number of arguments')
 
-    admin_err_and_bias(recompute=True)
-    llin_discard_rate(recompute=True)
-    neg_binom(recompute=True)
-    survey_design(recompute=True)
+    admin_err_and_bias()
+    llin_discard_rate()
+    neg_binom()
+    survey_design()
     
     graphics.plot_neg_binom_fits()
