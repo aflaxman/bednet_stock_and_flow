@@ -85,13 +85,13 @@ def improve_admin_err_and_bias_from_posterior():
     # make a list of flow data dicts from output.csv
     import csv
     flow_data = []
-    for d in csv.DictReader(open(settings.PATH + 'output.csv')):
-        if d['Country'] in ['Liberia', 'SaoTome & Principe', 'Cameroon', 'Malawi', 'Madagascar']:
+    for d in csv.DictReader(open(settings.PATH + settings.CSV_NAME)):
+        if d['Country'] in ['Liberia', 'xxx SaoTome & Principe', 'Cameroon', 'Malawi', 'Madagascar']:
             if int(d['Year']) >= 2007:
                 flow_data.append(dict(country=d['Country'],
                                       year=int(d['Year']),
                                       total_llins=float(d['LLINs Distributed (Thousands)'])*1000.,
-                                      total_st=(float(d['LLINs Shipped Lower CI'])-float(d['LLINs Shipped Upper CI'])) * 1000. / (2.*1.96)
+                                      total_st=(float(d['LLINs Shipped Upper CI'])-float(d['LLINs Shipped Lower CI'])) * 1000. / (2.*1.96)
                                       ))
 
     # recompute empirical priors

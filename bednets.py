@@ -150,13 +150,13 @@ def main(country_id):
         return normal_like(amt_below_cap, 0., tau)
     vars += [proven_capacity]
 
-#    itn_composition_std = .5
-#    @potential
-#    def itn_composition(llin=Theta, non_llin=Omega, tau=itn_composition_std**-2):
-#        frac_llin = llin / (llin + non_llin)
-#        return normal_like(frac_llin[[0,1,2,6,7,8,9,10,11]],
-#                           [0., 0., 0., 1., 1., 1., 1., 1., 1.], tau)
-#    vars += [itn_composition]
+    itn_composition_std = .5
+    @potential
+    def itn_composition(llin=Theta, non_llin=Omega, tau=itn_composition_std**-2):
+        frac_llin = llin / (llin + non_llin)
+        return normal_like(frac_llin[[0,1,2,6,7,8,9,10,11]],
+                           [0., 0., 0., 1., 1., 1., 1., 1., 1.], tau)
+    vars += [itn_composition]
 
     smooth_std = .5
     @potential
