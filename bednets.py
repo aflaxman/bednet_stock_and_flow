@@ -207,7 +207,7 @@ def main(country_id):
 
         @observed
         @stochastic(name='administrative_distribution_%s' % year)
-        def obs(value=log(d), year=year,  # d should maybe be log(d)
+        def obs(value=log(d), year=year,
                 delta=delta, s_d=s_d, e_d=e_d, beta=beta):
             pred = log(max(1., delta[year - year_start] + beta*delta[year+1 - year_start])) + e_d
             return normal_like(value, pred, 1. / s_d**2)
@@ -503,10 +503,13 @@ if __name__ == '__main__':
 
     if len(args) != 1:
         parser.error('incorrect number of arguments')
+    elif args[0] == 'summarize':
+        import explore
+        explore.summarize_fits()
     else:
         try:
             country_id = int(args[0])
         except ValueError:
-            parser.error('country_id must be an integer')
+            parser.error('country_id must be an integer (or summarize to generate summary tables)')
 
         main(country_id)

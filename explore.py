@@ -4,7 +4,15 @@ import re
 import pylab as pl
 import pymc
 
-def load_pickles(path='.'):
+def load_pickles(path='./'):
+    """ Load all of the files with name bednet_model.*pickle in the
+    specified directory
+
+    Example
+    -------
+    >>> db = explore.load_pickles('/home/j/Project/Models/bednets/2010_07_09/')
+    """
+    
     import os, sys
     file_list = os.listdir(path)
 
@@ -15,10 +23,72 @@ def load_pickles(path='.'):
             print 'loading', f, '...',
             sys.stdout.flush()
             k=match.group()
-            db[k] = pymc.database.pickle.load(f)
+            db[k] = pymc.database.pickle.load(path + f)
             print 'finished.'
 
     return db
+
+def midyear_coverage_table(db, table_start=2007, table_end=2010):
+    """ Output a table of midyear coverage estimates by country
+
+    Example
+    -------
+    >>> db = explore.load_pickles('/home/j/Project/Models/bednets/2010_07_09/')
+    >>> tab = explore.midyear_coverage_table(db)
+    >>> f = open('/home/j/Project/Models/bednets/2010_08_05/best_case.csv', 'w')
+    >>> import csv
+    >>> cf = csv.writer(f)
+    >>> cf.writerows(tab)
+    >>> f.close()
+    """
+    import settings
+    from pylab import mean, std, sort
+    
+    headers = [ 'Country' ]
+    for y in range(table_start, table_end+1):
+        headers += [y, 'ui']
+
+    tab = [ headers ]
+
+    for k, p in sorted(db.items()):
+        row = [k.split('_')[2]] # TODO: refactor k.split into function 
+        cov = p.__getattribute__('itn coverage').gettrace()
+        for y in range(table_start, table_end+1):
+            i = y-settings.year_start
+            c_y = sort(100 * .5 * (cov[:, i] + cov[:, i+1]))  # compute mid-year coverage % posterior draws
+            n = len(c_y)
+            row += ['%2.0f' % c_y[.5*n], '(%2.0f, %2.0f)' % (c_y[.025*n], c_y[.975*n])]
+        tab.append(row)
+        
+    return tab
+
+def summarize_fits(path=''):
+    """ Generate summary tables for all models in a given dir
+
+    Parameters
+    ----------
+    path : str, optional
+      if path is blank, use settings.PATH
+
+    Example
+    -------
+    >>> explore.summarize_fits('./')   # use pickle files in current directory
+    """
+    if not path:
+        import settings
+        path = settings.PATH
+    db = load_pickles(path)
+
+    rows= midyear_coverage_table(db)
+
+    import csv
+    f = open(path + 'summary.csv', 'w')
+    cf = csv.writer(f)
+    cf.writerows(rows)
+    f.close()
+
+    # TODO: notify that model is complete
+    # e.g. http://www.al1us.net/?p=79 to notify via skype msg
 
 def scatter_stats(db, s1, s2, f1=None, f2=None, **kwargs):
     if f1 == None:

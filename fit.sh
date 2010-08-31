@@ -26,7 +26,7 @@ echo "**** JOB STARTED ON $GSITSHOST AT $GSITSDATE"
 echo "**** JOB RUNNING IN $GSITSPWD"
 ##
 
-cd /home/abie_test/bednet_stock_and_flow/
+cd /home/OUTPOST/abie/bednet_stock_and_flow/
 export MPLCONFIGDIR='.'
 
 echo calling bednets.py "$@"
