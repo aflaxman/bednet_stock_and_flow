@@ -9,8 +9,8 @@ TESTING = False
 
 # Use 5000 samples for final uncertainty estimates;  50 will be enough for refining model/priors
 #NUM_SAMPLES = 50
-NUM_SAMPLES = 5000
-THIN = 1000
+NUM_SAMPLES = 10000
+THIN = 2000
 BURN = 250000
 #METHOD = 'NormApprox'
 METHOD = 'MCMC'

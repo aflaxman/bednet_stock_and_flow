@@ -175,7 +175,7 @@ def admin_err_and_bias(recompute=False, flow_data=None):
 
         @observed
         @stochastic(name='obs_%s'%str(k))
-        def obs(value=log(d['obs_t']),
+        def obs(value=log(max(1., d['obs_t'])),
                 pred=pred,
                 log_v=1.1*d['se_t']**2/d['true_t']**2 + 1.1*d['se_{t+1}']**2/d['true_{t+1}']**2,
                 sigma=sigma):

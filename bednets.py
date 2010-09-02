@@ -200,7 +200,7 @@ def main(country_id):
     for d in data.admin_llin:
         if d['country'] != c:
             continue
-        data_dict[d['year']] = d['program_llins']
+        data_dict[d['year']] = max(1., d['program_llins'])
         
     admin_distribution_obs = []
     for year, d in data_dict.items():
