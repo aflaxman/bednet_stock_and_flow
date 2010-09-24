@@ -449,7 +449,7 @@ def main(country_id):
 
     try:  # sleep for a random time interval to avoid collisions when writing results
         print 'sleeping...'
-        #time.sleep(random.random()*30)
+        time.sleep(random.random()*30)
         print '...woke up'
     except:  # but let user cancel with cntl-C if there is a rush
         print '...work up early'
