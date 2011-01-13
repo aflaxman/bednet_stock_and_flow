@@ -21,7 +21,7 @@ import subprocess
 
 import settings
 
-def run_all(fit_empirical_priors=False):
+def run_all(fit_empirical_priors=True):
     """ Enqueues all jobs necessary to fit model
 
     Example

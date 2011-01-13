@@ -479,6 +479,8 @@ def main(country_id):
     f.close()
     
     f = open(settings.PATH + 'traces/itn_coverage_%s_%d_%s.csv' % (c, country_id, time.strftime('%Y_%m_%d_%H_%M')), 'w')
+    f.write(','.join(['itn_hhcov_%d' % year for year in range(year_start, year_end)]))
+    f.write('\n')
     for row in itn_coverage.trace():
         f.write(','.join(['%.4f' % cell for cell in row]))
         f.write('\n')
