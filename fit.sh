@@ -30,7 +30,7 @@ cd /home/OUTPOST/abie/bednet_stock_and_flow/
 export MPLCONFIGDIR='.'
 
 echo calling bednets.py "$@"
-/usr/local/epd_py25-4.3.0/bin/python bednets.py "$@"
+/usr/local/epd_py25-4.3.0/bin/python -u bednets.py "$@"
 
 
 ## Put the current date into a variable and report it before we exit.
